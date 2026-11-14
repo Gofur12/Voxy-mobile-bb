@@ -4,6 +4,7 @@ import me.cortex.voxy.client.core.RenderProperties;
 import me.cortex.voxy.client.core.gl.GlFramebuffer;
 import me.cortex.voxy.client.core.gl.GlTexture;
 import me.cortex.voxy.client.core.gl.GlVertexArray;
+import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
 import me.cortex.voxy.client.core.gl.shader.Shader;
 import me.cortex.voxy.client.core.gl.shader.ShaderType;
 import org.lwjgl.opengl.GL11;
@@ -92,7 +93,7 @@ public class HiZBuffer {
 
         glBindTextureUnit(0, srcDepthTex);
         glBindSampler(0, this.sampler);
-        glUniform1i(0, 0);
+        GlBackendRuntime.requireBackend().setUniform1i(0, 0);
         int cw = this.width;
         int ch = this.height;
         for (int i = 0; i < this.levels; i++) {
