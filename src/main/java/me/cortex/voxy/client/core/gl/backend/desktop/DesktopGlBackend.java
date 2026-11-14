@@ -142,13 +142,25 @@ public final class DesktopGlBackend implements GlBackend {
         if (size <= 0) {
             throw new IllegalArgumentException("Buffer size must be positive");
         }
-        int buffer = GL45C.glCreateBuffers();
+
+        int buffer = GL15C.glGenBuffers();
+        int previousBinding = GL11C.glGetInteger(GL15C.GL_ARRAY_BUFFER_BINDING);
         try {
-            GL45C.nglNamedBufferStorage(buffer, size, initialDataAddress, storageFlags);
+            GL15C.glBindBuffer(GL15C.GL_ARRAY_BUFFER, buffer);
+            if (storageFlags == 0) {
+                // Mutable storage is the GLES 3.x-compatible path used by
+                // conventional geometry/metadata buffers. Keep immutable
+                // storage for sparse and persistent-mapping desktop buffers.
+                GL15C.nglBufferData(GL15C.GL_ARRAY_BUFFER, size, initialDataAddress, GL15C.GL_DYNAMIC_DRAW);
+            } else {
+                GL45C.nglNamedBufferStorage(buffer, size, initialDataAddress, storageFlags);
+            }
             return buffer;
         } catch (RuntimeException | Error failure) {
             GL15C.glDeleteBuffers(buffer);
             throw failure;
+        } finally {
+            GL15C.glBindBuffer(GL15C.GL_ARRAY_BUFFER, previousBinding);
         }
     }
 
@@ -177,7 +189,13 @@ public final class DesktopGlBackend implements GlBackend {
         if (offset < 0 || size < 0 || sourceAddress == 0L) {
             throw new IllegalArgumentException("Invalid buffer upload range or source address");
         }
-        GL45C.nglNamedBufferSubData(handle, offset, size, sourceAddress);
+        int previousBinding = GL11C.glGetInteger(GL15C.GL_ARRAY_BUFFER_BINDING);
+        try {
+            GL15C.glBindBuffer(GL15C.GL_ARRAY_BUFFER, handle);
+            GL15C.nglBufferSubData(GL15C.GL_ARRAY_BUFFER, offset, size, sourceAddress);
+        } finally {
+            GL15C.glBindBuffer(GL15C.GL_ARRAY_BUFFER, previousBinding);
+        }
     }
 
     @Override
