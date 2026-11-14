@@ -9,13 +9,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-// OpenGL enum values are API constants; actual calls are delegated to GlBackend.
-    private static final int GL_UNIFORM_BUFFER = 0x8A11;
-    private static final int GL_SHADER_STORAGE_BUFFER = 0x90D2;
-
-
 //TODO: rewrite the entire shader builder system
 public class AutoBindingShader extends Shader {
+
+    // OpenGL enum values are API constants; actual calls are delegated to GlBackend.
+    private static final int GL_UNIFORM_BUFFER = 0x8A11;
+    private static final int GL_SHADER_STORAGE_BUFFER = 0x90D2;
 
     private record BufferBinding(int target, int index, GlBuffer buffer, long offset, long size) {}
     private record TextureBinding(int unit, int sampler, GlTexture texture) {}
