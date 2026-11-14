@@ -128,21 +128,26 @@ public class DownloadStream {
         }
 
         long mapped = 0L;
-        boolean mappedSuccessfully = false;
+        boolean mappingOpened = false;
+        boolean copyCompleted = false;
         try {
             mapped = backend.mapBufferRange(buffer.id, sourceOffset, size, GL_MAP_READ_BIT);
             if (mapped == 0L) {
                 throw new IllegalStateException("Backend returned a null pointer for a readable buffer mapping");
             }
-            mappedSuccessfully = true;
+            mappingOpened = true;
             MemoryUtil.memCopy(mapped, destination, size);
+            copyCompleted = true;
         } finally {
-            if (mappedSuccessfully && !backend.unmapBuffer(buffer.id)) {
-                MemoryUtil.nmemFree(destination);
-                throw new IllegalStateException("GPU buffer contents became invalid while unmapping readback range");
+            boolean contentsValid = true;
+            if (mappingOpened) {
+                contentsValid = backend.unmapBuffer(buffer.id);
             }
-            if (!mappedSuccessfully) {
+            if (!copyCompleted || !contentsValid) {
                 MemoryUtil.nmemFree(destination);
+            }
+            if (!contentsValid) {
+                throw new IllegalStateException("GPU buffer contents became invalid while unmapping readback range");
             }
         }
         this.cpuDownloads.add(new CpuDownload(destination, size, consumer));
