@@ -49,6 +49,14 @@ public interface GlBackend extends AutoCloseable {
     /** Sets a two-component floating-point uniform on the currently bound program. */
     void setUniform2f(int location, float x, float y);
 
+    /**
+     * Creates a buffer of the requested size.
+     *
+     * A zero storageFlags value requests ordinary mutable storage, which can
+     * be implemented with the GLES 3.x buffer-data API. Non-zero flags may
+     * request desktop-only immutable, sparse, or persistent storage and must
+     * be capability-gated by the caller/backend.
+     */
     int createBuffer(long size, long initialDataAddress, int storageFlags);
 
     void clearBuffer(int handle, int internalFormat, int format, int type, long dataAddress);
