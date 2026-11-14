@@ -21,6 +21,8 @@ import me.cortex.voxy.client.core.rendering.hierachical.NodeCleaner;
 import me.cortex.voxy.client.core.rendering.section.IUsesMeshlets;
 import me.cortex.voxy.client.core.rendering.section.backend.AbstractSectionRenderer;
 import me.cortex.voxy.client.core.rendering.section.backend.mdic.MDICSectionRenderer;
+import me.cortex.voxy.client.core.gl.backend.GlCapabilities;
+import org.lwjgl.opengl.GL;
 import me.cortex.voxy.client.core.rendering.section.geometry.BasicSectionGeometryData;
 import me.cortex.voxy.client.core.rendering.section.geometry.IGeometryData;
 import me.cortex.voxy.client.core.rendering.util.DownloadStream;
@@ -77,7 +79,41 @@ public class VoxyRenderSystem {
     private final RenderProperties properties;
 
     private static AbstractSectionRenderer.Factory<?,? extends IGeometryData> getRenderBackendFactory() {
-        //TODO: need todo a thing where selects optimal section render based on if supports the pipeline and geometry data type
+        final org.lwjgl.opengl.GLCapabilities gl;
+        try {
+            gl = GL.getCapabilities();
+        } catch (IllegalStateException noCurrentContext) {
+            throw new IllegalStateException("Voxy renderer selection requires a current OpenGL context", noCurrentContext);
+        }
+
+        // This renderer also relies on the desktop GL 4.5 DSA API. Do not
+        // infer compatibility from the device name or from GLES extensions.
+        if (!gl.OpenGL45) {
+            throw new UnsupportedOperationException(
+                    "Voxy MDIC renderer requires desktop OpenGL 4.5; no GLES renderer is available yet"
+            );
+        }
+
+        GlCapabilities capabilities = new GlCapabilities(
+                4, 5, false,
+                gl.GL_ARB_buffer_storage,
+                gl.GL_ARB_buffer_storage,
+                gl.OpenGL43 || gl.GL_ARB_compute_shader,
+                gl.OpenGL43 || gl.GL_ARB_shader_storage_buffer_object,
+                gl.OpenGL42 || gl.GL_ARB_shader_image_load_store,
+                gl.OpenGL43 || gl.GL_ARB_multi_draw_indirect,
+                gl.GL_ARB_indirect_parameters,
+                gl.GL_ARB_texture_view,
+                gl.GL_KHR_shader_subgroup,
+                gl.GL_ARB_gpu_shader_int64,
+                gl.OpenGL32
+        );
+        if (!capabilities.supportsDesktopMdicPath()) {
+            throw new UnsupportedOperationException(
+                    "Voxy MDIC renderer is unavailable: compute, SSBO, image load/store, " +
+                    "multi-draw indirect, or indirect parameters are unsupported"
+            );
+        }
         return MDICSectionRenderer.FACTORY;
     }
 
@@ -86,6 +122,10 @@ public class VoxyRenderSystem {
         // than timeout, we keep the world acquired
         world.acquireRef();
         Logger.info("Creating Voxy render system");
+
+        // Select and validate the renderer before any SSBO state queries or
+        // GPU resource construction can run.
+        var backendFactory = getRenderBackendFactory();
 
         System.gc();
 
@@ -110,7 +150,6 @@ public class VoxyRenderSystem {
 
             this.properties = RenderProperties.getRenderProperties();
             this.visbleSectionStream = new StreamedBoundStore();
-            var backendFactory = getRenderBackendFactory();
             {
                 this.modelService = new ModelBakerySubsystem(world.getMapper());
                 this.renderGen = new RenderGenerationService(world, this.modelService, sm, IUsesMeshlets.class.isAssignableFrom(backendFactory.clz()));
