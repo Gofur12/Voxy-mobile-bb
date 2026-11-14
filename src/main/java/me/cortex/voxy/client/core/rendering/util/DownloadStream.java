@@ -17,14 +17,11 @@ import java.util.Deque;
 import java.util.function.Consumer;
 
 import static me.cortex.voxy.common.util.AllocationArena.SIZE_LIMIT;
-import static org.lwjgl.opengl.GL11.glFinish;
 import static org.lwjgl.opengl.GL30C.GL_MAP_READ_BIT;
-import static org.lwjgl.opengl.GL42.GL_BUFFER_UPDATE_BARRIER_BIT;
-import static org.lwjgl.opengl.GL42.glMemoryBarrier;
-import static org.lwjgl.opengl.GL44.GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT;
-import static org.lwjgl.opengl.GL45.glCopyNamedBufferSubData;
 
 public class DownloadStream {
+    private static final int BUFFER_UPDATE_BARRIER_BIT = 0x00000200;
+    private static final int CLIENT_MAPPED_BUFFER_BARRIER_BIT = 0x00004000;
     public interface DownloadResultConsumer {
         void consume(long ptr, long size);
     }
@@ -90,7 +87,7 @@ public class DownloadStream {
                 this.commit();
                 int attempts = 10;
                 while (--attempts != 0 && this.caddr == SIZE_LIMIT) {
-                    glFinish();
+                    GlBackendRuntime.requireBackend().finish();
                     this.tick();
                     this.caddr = this.allocationArena.alloc((int) size);
                 }
@@ -160,11 +157,11 @@ public class DownloadStream {
         if (this.downloadList.isEmpty()) {
             return;
         }
-        glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
+        GlBackendRuntime.requireBackend().memoryBarrier(BUFFER_UPDATE_BARRIER_BIT);
         for (var entry : this.downloadList) {
-            glCopyNamedBufferSubData(entry.target.id, this.downloadBuffer.id, entry.targetOffset, entry.downloadStreamOffset, entry.size);
+            GlBackendRuntime.requireBackend().copyBufferSubData(entry.target.id, this.downloadBuffer.id, entry.targetOffset, entry.downloadStreamOffset, entry.size);
         }
-        glMemoryBarrier(GL_CLIENT_MAPPED_BUFFER_BARRIER_BIT | GL_BUFFER_UPDATE_BARRIER_BIT);
+        GlBackendRuntime.requireBackend().memoryBarrier(CLIENT_MAPPED_BUFFER_BARRIER_BIT | BUFFER_UPDATE_BARRIER_BIT);
         this.thisFrameDownloadList.addAll(this.downloadList);
         this.downloadList.clear();
         this.caddr = -1;
