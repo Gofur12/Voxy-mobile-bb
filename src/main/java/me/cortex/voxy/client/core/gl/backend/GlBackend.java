@@ -69,6 +69,9 @@ public interface GlBackend extends AutoCloseable {
 
     void uploadBuffer(int handle, long offset, long size, long sourceAddress);
 
+    /** Copies bytes between backend buffer objects without exposing API-specific calls. */
+    void copyBufferSubData(int source, int destination, long sourceOffset, long destinationOffset, long size);
+
     long mapBufferRange(int handle, long offset, long length, int accessFlags);
 
     boolean unmapBuffer(int handle);
