@@ -29,7 +29,12 @@ public interface GlBackend extends AutoCloseable {
 
     void bindBuffer(int target, int handle);
 
-    int createTexture2D();
+    int createTexture(int target);
+
+    int createTextureView(int source, int target, int internalFormat,
+                          int minLevel, int levelCount, int minLayer, int layerCount);
+
+    void clearTextureImage(int handle, int level, int format, int type, long dataAddress);
 
     void allocateTexture2D(int handle, int levels, int internalFormat, int width, int height);
 
