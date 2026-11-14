@@ -3,6 +3,8 @@ package me.cortex.voxy.client.core.gl;
 import me.cortex.voxy.common.util.TrackedObject;
 import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
 
+import static org.lwjgl.opengl.GL30.GL_FRAMEBUFFER_COMPLETE;
+
 public class GlFramebuffer extends TrackedObject {
     public final int id;
     public GlFramebuffer() {
@@ -23,7 +25,7 @@ public class GlFramebuffer extends TrackedObject {
     }
 
     public GlFramebuffer bind(int attachment, GlTexture texture, int lvl) {
-        glNamedFramebufferTexture(this.id, attachment, texture.id, lvl);
+        GlBackendRuntime.requireBackend().attachTexture2D(this.id, attachment, texture.id, lvl);
         return this;
     }
 
