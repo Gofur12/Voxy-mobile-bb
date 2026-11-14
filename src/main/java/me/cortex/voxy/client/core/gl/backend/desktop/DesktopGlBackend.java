@@ -150,14 +150,39 @@ public final class DesktopGlBackend implements GlBackend {
     }
 
     @Override
-    public boolean isFramebufferComplete(int framebuffer) {
-        return GL45C.glCheckNamedFramebufferStatus(framebuffer, GL30C.GL_FRAMEBUFFER)
-                == GL30C.GL_FRAMEBUFFER_COMPLETE;
+    public void attachRenderbuffer(int framebuffer, int attachment, int renderbuffer) {
+        GL45C.glNamedFramebufferRenderbuffer(framebuffer, attachment, GL30C.GL_RENDERBUFFER, renderbuffer);
+    }
+
+    @Override
+    public void setFramebufferDrawBuffers(int framebuffer, int[] buffers) {
+        GL45C.glNamedFramebufferDrawBuffers(framebuffer, buffers);
+    }
+
+    @Override
+    public int getFramebufferStatus(int framebuffer) {
+        return GL45C.glCheckNamedFramebufferStatus(framebuffer, GL30C.GL_FRAMEBUFFER);
     }
 
     @Override
     public void deleteFramebuffer(int handle) {
         GL30C.glDeleteFramebuffers(handle);
+    }
+
+    @Override
+    public int createRenderbuffer() {
+        return GL45C.glCreateRenderbuffers();
+    }
+
+    @Override
+    public void allocateRenderbuffer(int renderbuffer, int format, int width, int height) {
+        if (width <= 0 || height <= 0) throw new IllegalArgumentException("Renderbuffer dimensions must be positive");
+        GL45C.glNamedRenderbufferStorage(renderbuffer, format, width, height);
+    }
+
+    @Override
+    public void deleteRenderbuffer(int renderbuffer) {
+        GL30C.glDeleteRenderbuffers(renderbuffer);
     }
 
     @Override
