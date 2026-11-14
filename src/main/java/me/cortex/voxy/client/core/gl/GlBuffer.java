@@ -13,7 +13,7 @@ import static org.lwjgl.opengl.GL11.GL_UNPACK_SKIP_ROWS;
 import static org.lwjgl.opengl.GL30.GL_RED_INTEGER;
 import static org.lwjgl.opengl.GL30.GL_R8UI;
 import static org.lwjgl.opengl.GL30.GL_R32UI;
-import static org.lwjgl.opengl.GL30.GL_UNSIGNED_INT;
+import static org.lwjgl.opengl.GL11.GL_UNSIGNED_INT;
 
 public class GlBuffer extends TrackedObject {
     public final int id;
