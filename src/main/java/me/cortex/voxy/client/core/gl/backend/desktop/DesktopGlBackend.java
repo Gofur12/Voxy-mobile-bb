@@ -133,6 +133,11 @@ public final class DesktopGlBackend implements GlBackend {
     }
 
     @Override
+    public void setUniform2f(int location, float x, float y) {
+        GL20C.glUniform2f(location, x, y);
+    }
+
+    @Override
     public int createBuffer(long size, long initialDataAddress, int storageFlags) {
         if (size <= 0) {
             throw new IllegalArgumentException("Buffer size must be positive");
