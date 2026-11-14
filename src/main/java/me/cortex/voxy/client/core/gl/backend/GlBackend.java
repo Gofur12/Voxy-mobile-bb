@@ -44,9 +44,19 @@ public interface GlBackend extends AutoCloseable {
 
     void attachTexture2D(int framebuffer, int attachment, int texture, int level);
 
-    boolean isFramebufferComplete(int framebuffer);
+    void attachRenderbuffer(int framebuffer, int attachment, int renderbuffer);
+
+    void setFramebufferDrawBuffers(int framebuffer, int[] buffers);
+
+    int getFramebufferStatus(int framebuffer);
 
     void deleteFramebuffer(int framebuffer);
+
+    int createRenderbuffer();
+
+    void allocateRenderbuffer(int renderbuffer, int format, int width, int height);
+
+    void deleteRenderbuffer(int renderbuffer);
 
     int createVertexArray();
 
