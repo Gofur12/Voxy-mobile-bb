@@ -67,6 +67,14 @@ public interface GlBackend extends AutoCloseable {
 
     void bindBuffer(int target, int handle);
 
+    void bindBufferBase(int target, int index, int buffer);
+
+    void bindBufferRange(int target, int index, int buffer, long offset, long size);
+
+    void bindTextureUnit(int unit, int texture);
+
+    void bindSampler(int unit, int sampler);
+
     int createTexture(int target);
 
     int createTextureView(int source, int target, int internalFormat,
