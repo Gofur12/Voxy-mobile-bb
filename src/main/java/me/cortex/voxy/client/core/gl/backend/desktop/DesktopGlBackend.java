@@ -8,6 +8,7 @@ import org.lwjgl.opengl.GL15C;
 import org.lwjgl.opengl.GL20C;
 import org.lwjgl.opengl.GL30C;
 import org.lwjgl.opengl.GL32C;
+import org.lwjgl.opengl.GL33C;
 import org.lwjgl.opengl.GL42C;
 import org.lwjgl.opengl.GL45C;
 
@@ -203,6 +204,27 @@ public final class DesktopGlBackend implements GlBackend {
     @Override
     public void bindBuffer(int target, int handle) {
         GL15C.glBindBuffer(target, handle);
+    }
+
+    @Override
+    public void bindBufferBase(int target, int index, int buffer) {
+        GL30C.glBindBufferBase(target, index, buffer);
+    }
+
+    @Override
+    public void bindBufferRange(int target, int index, int buffer, long offset, long size) {
+        if (offset < 0 || size <= 0) throw new IllegalArgumentException("Invalid indexed buffer range");
+        GL30C.glBindBufferRange(target, index, buffer, offset, size);
+    }
+
+    @Override
+    public void bindTextureUnit(int unit, int texture) {
+        GL45C.glBindTextureUnit(unit, texture);
+    }
+
+    @Override
+    public void bindSampler(int unit, int sampler) {
+        GL33C.glBindSampler(unit, sampler);
     }
 
     @Override
