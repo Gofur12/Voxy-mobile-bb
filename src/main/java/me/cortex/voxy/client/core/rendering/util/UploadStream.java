@@ -79,7 +79,16 @@ public class UploadStream {
         return this.uploadAddress(uploadOffset);
     }
 
+    /**
+     * Allocates a raw pointer into the upload buffer without registering a destination copy.
+     * This is only meaningful when persistent GPU mapping is available. CPU staging mode has
+     * no corresponding GPU buffer, so accepting this call would silently discard the bytes
+     * when commit() resets the staging arena.
+     */
     public long rawUpload(int size) {
+        if (!this.persistentMapping) {
+            throw new UnsupportedOperationException("Raw upload requires persistent GPU mapping; use upload(target, offset, size) in CPU staging mode");
+        }
         return this.uploadAddress(this.rawUploadAddress(size));
     }
 
