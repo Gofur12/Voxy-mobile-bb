@@ -1,6 +1,7 @@
 package me.cortex.voxy.client.core.gl;
 
 import me.cortex.voxy.common.util.TrackedObject;
+import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
 
 import java.util.Arrays;
 
@@ -14,29 +15,29 @@ public class GlVertexArray extends TrackedObject {
     private int[] indices = new int[0];
     private int stride;
     public GlVertexArray() {
-        this.id = glCreateVertexArrays();
+        this.id = GlBackendRuntime.requireBackend().createVertexArray();
     }
 
     @Override
     public void free() {
         this.free0();
-        glDeleteVertexArrays(this.id);
+        GlBackendRuntime.requireBackend().deleteVertexArray(this.id);
     }
 
     public void bind() {
-        glBindVertexArray(this.id);
+        GlBackendRuntime.requireBackend().bindVertexArray(this.id);
     }
 
     public GlVertexArray bindBuffer(int buffer) {
         //TODO: optimization, use glVertexArrayVertexBuffers
         for (int index : this.indices) {
-            glVertexArrayVertexBuffer(this.id, index, buffer, 0, this.stride);
+            GlBackendRuntime.requireBackend().bindVertexArrayVertexBuffer(this.id, index, buffer, 0, this.stride);
         }
         return this;
     }
 
     public GlVertexArray bindElementBuffer(int buffer) {
-        glVertexArrayElementBuffer(this.id, buffer);
+        GlBackendRuntime.requireBackend().bindVertexArrayElementBuffer(this.id, buffer);
         return this;
     }
 
@@ -47,8 +48,8 @@ public class GlVertexArray extends TrackedObject {
 
     public GlVertexArray setI(int index, int type, int count, int offset) {
         this.addIndex(index);
-        glEnableVertexArrayAttrib(this.id, index);
-        glVertexArrayAttribIFormat(this.id, index, count, type, offset);
+        GlBackendRuntime.requireBackend().enableVertexArrayAttribute(this.id, index);
+        GlBackendRuntime.requireBackend().setVertexArrayIntegerAttributeFormat(this.id, index, count, type, offset);
         return this;
     }
 
@@ -59,7 +60,7 @@ public class GlVertexArray extends TrackedObject {
     public GlVertexArray setF(int index, int type, int count, boolean normalize, int offset) {
         this.addIndex(index);
         glEnableVertexArrayAttrib(this.id, index);
-        glVertexArrayAttribFormat(this.id, index, count, type, normalize, offset);
+        GlBackendRuntime.requireBackend().setVertexArrayFloatAttributeFormat(this.id, index, count, type, normalize, offset);
         return this;
     }
 
