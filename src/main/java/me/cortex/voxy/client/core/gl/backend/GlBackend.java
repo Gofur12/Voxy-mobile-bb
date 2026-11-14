@@ -69,6 +69,9 @@ public interface GlBackend extends AutoCloseable {
 
     void uploadBuffer(int handle, long offset, long size, long sourceAddress);
 
+    /** Flushes a range written through a non-coherent persistent mapping. */
+    void flushMappedBufferRange(int handle, long offset, long length);
+
     /** Copies bytes between backend buffer objects without exposing API-specific calls. */
     void copyBufferSubData(int source, int destination, long sourceOffset, long destinationOffset, long size);
 
