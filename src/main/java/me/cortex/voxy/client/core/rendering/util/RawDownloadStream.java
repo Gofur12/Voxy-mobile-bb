@@ -75,52 +75,87 @@ public class RawDownloadStream {
     public void tick() {
         this.submit();
         GlBackend backend = GlBackendRuntime.requireBackend();
+        Throwable failure = null;
         while (!this.frames.isEmpty()) {
             DownloadFrame frame = this.frames.peekFirst();
             if (!frame.fence.signaled()) break;
             this.frames.removeFirst();
-            try {
-                for (DownloadFragment fragment : frame.fragments) {
+            for (DownloadFragment fragment : frame.fragments) {
+                try {
                     if (this.persistentMapping) {
                         long address = this.persistentBuffer.addr() + fragment.allocation;
                         fragment.callback.accept(address);
                     } else {
                         this.deliverCpu(fragment, backend);
                     }
+                } catch (RuntimeException | Error callbackFailure) {
+                    failure = appendFailure(failure, callbackFailure);
                 }
-            } finally {
-                for (DownloadFragment fragment : frame.fragments) {
+            }
+            for (DownloadFragment fragment : frame.fragments) {
+                try {
                     this.allocationArena.free(fragment.allocation);
+                } catch (RuntimeException | Error cleanupFailure) {
+                    failure = appendFailure(failure, cleanupFailure);
                 }
+            }
+            try {
                 frame.fence.free();
+            } catch (RuntimeException | Error cleanupFailure) {
+                failure = appendFailure(failure, cleanupFailure);
             }
         }
+        rethrowFailure(failure);
     }
 
     private void deliverCpu(DownloadFragment fragment, GlBackend backend) {
         long destination = MemoryUtil.nmemAlloc(fragment.size);
         if (destination == 0L) throw new OutOfMemoryError("Unable to allocate raw download CPU staging memory");
         long mapped = 0L;
-        boolean opened = false;
-        boolean copied = false;
+        Throwable failure = null;
+        boolean valid = true;
         try {
             mapped = backend.mapBufferRange(this.cpuReadbackBuffer.id, fragment.allocation,
                     fragment.size, GL_MAP_READ_BIT);
             if (mapped == 0L) throw new IllegalStateException("Backend returned a null readback mapping");
-            opened = true;
             MemoryUtil.memCopy(mapped, destination, fragment.size);
-            copied = true;
+        } catch (RuntimeException | Error readbackFailure) {
+            failure = readbackFailure;
         } finally {
-            boolean valid = true;
-            if (opened) valid = backend.unmapBuffer(this.cpuReadbackBuffer.id);
-            if (!copied || !valid) MemoryUtil.nmemFree(destination);
-            if (!valid) throw new IllegalStateException("Raw download buffer became invalid during readback");
+            if (mapped != 0L) {
+                try {
+                    valid = backend.unmapBuffer(this.cpuReadbackBuffer.id);
+                    if (!valid) {
+                        failure = appendFailure(failure,
+                                new IllegalStateException("Raw download buffer became invalid during readback"));
+                    }
+                } catch (RuntimeException | Error unmapFailure) {
+                    failure = appendFailure(failure, unmapFailure);
+                }
+            }
+        }
+        if (failure != null) {
+            MemoryUtil.nmemFree(destination);
+            rethrowFailure(failure);
         }
         try {
             fragment.callback.accept(destination);
         } finally {
             MemoryUtil.nmemFree(destination);
         }
+    }
+
+    private static Throwable appendFailure(Throwable first, Throwable next) {
+        if (first == null) return next;
+        if (first != next) first.addSuppressed(next);
+        return first;
+    }
+
+    private static void rethrowFailure(Throwable failure) {
+        if (failure == null) return;
+        if (failure instanceof RuntimeException runtimeFailure) throw runtimeFailure;
+        if (failure instanceof Error errorFailure) throw errorFailure;
+        throw new IllegalStateException(failure);
     }
 
     public int getBufferId() {
@@ -131,12 +166,26 @@ public class RawDownloadStream {
         this.submit();
         GlBackend backend = GlBackendRuntime.requireBackend();
         backend.finish();
-        this.tick();
-        if (!this.frames.isEmpty()) throw new IllegalStateException("Raw download frames remain after GPU finish");
-        if (this.persistentMapping) {
-            this.persistentBuffer.free();
-        } else {
-            this.cpuReadbackBuffer.free();
+        Throwable failure = null;
+        try {
+            this.tick();
+        } catch (RuntimeException | Error callbackFailure) {
+            failure = callbackFailure;
         }
+        if (!this.frames.isEmpty()) {
+            failure = appendFailure(failure,
+                    new IllegalStateException("Raw download frames remain after GPU finish"));
+        } else {
+            try {
+                if (this.persistentMapping) {
+                    this.persistentBuffer.free();
+                } else {
+                    this.cpuReadbackBuffer.free();
+                }
+            } catch (RuntimeException | Error cleanupFailure) {
+                failure = appendFailure(failure, cleanupFailure);
+            }
+        }
+        rethrowFailure(failure);
     }
 }
