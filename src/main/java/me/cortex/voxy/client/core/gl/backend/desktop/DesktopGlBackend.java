@@ -1,0 +1,171 @@
+package me.cortex.voxy.client.core.gl.backend.desktop;
+
+import me.cortex.voxy.client.core.gl.backend.GlBackend;
+import me.cortex.voxy.client.core.gl.backend.GlBufferUsage;
+import me.cortex.voxy.client.core.gl.backend.GlCapabilities;
+import org.lwjgl.opengl.GL;
+import org.lwjgl.opengl.GL11C;
+import org.lwjgl.opengl.GL15C;
+import org.lwjgl.opengl.GL30C;
+import org.lwjgl.opengl.GL42C;
+import org.lwjgl.opengl.GL45C;
+
+/**
+ * Desktop OpenGL 4.5 implementation of the backend contract.
+ *
+ * The Minecraft/loader owns the context. This adapter must be created and
+ * used only on a thread where that context is current.
+ */
+public final class DesktopGlBackend implements GlBackend {
+    private final GlCapabilities capabilities;
+
+    public DesktopGlBackend() {
+        org.lwjgl.opengl.GLCapabilities gl = GL.getCapabilities();
+        if (!gl.OpenGL45) {
+            throw new IllegalStateException("Desktop Voxy backend requires OpenGL 4.5");
+        }
+
+        int major = GL11C.glGetInteger(GL30C.GL_MAJOR_VERSION);
+        int minor = GL11C.glGetInteger(GL30C.GL_MINOR_VERSION);
+        this.capabilities = new GlCapabilities(
+                major,
+                minor,
+                false,
+                gl.GL_ARB_buffer_storage,
+                gl.GL_ARB_buffer_storage,
+                gl.GL_ARB_compute_shader,
+                gl.GL_ARB_shader_storage_buffer_object,
+                gl.GL_ARB_shader_image_load_store,
+                gl.GL_ARB_multi_draw_indirect,
+                gl.GL_ARB_indirect_parameters,
+                gl.GL_ARB_texture_view,
+                gl.GL_KHR_shader_subgroup,
+                gl.GL_ARB_gpu_shader_int64,
+                gl.OpenGL32
+        );
+    }
+
+    @Override
+    public String name() {
+        return "desktop-opengl-45";
+    }
+
+    @Override
+    public GlCapabilities capabilities() {
+        return this.capabilities;
+    }
+
+    @Override
+    public int createBuffer(long size, int usageFlags) {
+        if (size <= 0) {
+            throw new IllegalArgumentException("Buffer size must be positive");
+        }
+        if (usageFlags != GlBufferUsage.STATIC
+                && usageFlags != GlBufferUsage.DYNAMIC
+                && usageFlags != GlBufferUsage.STREAM) {
+            throw new IllegalArgumentException("Unknown backend-neutral buffer usage: " + usageFlags);
+        }
+
+        int buffer = GL45C.glCreateBuffers();
+        try {
+            // Keep sub-data uploads legal for all usage hints. The usage value
+            // remains a policy hint, not an immutable-storage access mask.
+            GL45C.glNamedBufferStorage(buffer, size, GL45C.GL_DYNAMIC_STORAGE_BIT);
+            return buffer;
+        } catch (RuntimeException | Error failure) {
+            GL15C.glDeleteBuffers(buffer);
+            throw failure;
+        }
+    }
+
+    @Override
+    public void deleteBuffer(int handle) {
+        GL15C.glDeleteBuffers(handle);
+    }
+
+    @Override
+    public void uploadBuffer(int handle, long offset, long size, long sourceAddress) {
+        if (offset < 0 || size < 0 || sourceAddress == 0L) {
+            throw new IllegalArgumentException("Invalid buffer upload range or source address");
+        }
+        GL45C.nglNamedBufferSubData(handle, offset, size, sourceAddress);
+    }
+
+    @Override
+    public void bindBuffer(int target, int handle) {
+        GL15C.glBindBuffer(target, handle);
+    }
+
+    @Override
+    public int createTexture2D() {
+        return GL45C.glCreateTextures(GL11C.GL_TEXTURE_2D);
+    }
+
+    @Override
+    public void allocateTexture2D(int handle, int levels, int internalFormat, int width, int height) {
+        if (levels <= 0 || width <= 0 || height <= 0) {
+            throw new IllegalArgumentException("Texture dimensions and mip levels must be positive");
+        }
+        GL45C.glTextureStorage2D(handle, levels, internalFormat, width, height);
+    }
+
+    @Override
+    public void deleteTexture(int handle) {
+        GL11C.glDeleteTextures(handle);
+    }
+
+    @Override
+    public int createFramebuffer() {
+        return GL45C.glCreateFramebuffers();
+    }
+
+    @Override
+    public void attachTexture2D(int framebuffer, int attachment, int texture, int level) {
+        GL45C.glNamedFramebufferTexture(framebuffer, attachment, texture, level);
+    }
+
+    @Override
+    public boolean isFramebufferComplete(int framebuffer) {
+        return GL45C.glCheckNamedFramebufferStatus(framebuffer, GL30C.GL_FRAMEBUFFER)
+                == GL30C.GL_FRAMEBUFFER_COMPLETE;
+    }
+
+    @Override
+    public void deleteFramebuffer(int handle) {
+        GL30C.glDeleteFramebuffers(handle);
+    }
+
+    @Override
+    public int createVertexArray() {
+        return GL45C.glCreateVertexArrays();
+    }
+
+    @Override
+    public void bindVertexArray(int handle) {
+        GL30C.glBindVertexArray(handle);
+    }
+
+    @Override
+    public void deleteVertexArray(int handle) {
+        GL30C.glDeleteVertexArrays(handle);
+    }
+
+    @Override
+    public void memoryBarrier(int barrierFlags) {
+        GL42C.glMemoryBarrier(barrierFlags);
+    }
+
+    @Override
+    public void finish() {
+        GL11C.glFinish();
+    }
+
+    /**
+     * The graphics context is owned by Minecraft. Closing this adapter must
+     * never destroy or detach that context.
+     */
+    @Override
+    public void close() {
+        // No context ownership; no native resource is held by this adapter.
+    }
+}
