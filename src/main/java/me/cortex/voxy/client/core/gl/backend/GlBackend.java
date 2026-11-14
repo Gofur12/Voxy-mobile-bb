@@ -62,6 +62,16 @@ public interface GlBackend extends AutoCloseable {
 
     void bindVertexArray(int handle);
 
+    void bindVertexArrayVertexBuffer(int vertexArray, int bindingIndex, int buffer, long offset, int stride);
+
+    void bindVertexArrayElementBuffer(int vertexArray, int buffer);
+
+    void enableVertexArrayAttribute(int vertexArray, int attributeIndex);
+
+    void setVertexArrayIntegerAttributeFormat(int vertexArray, int attributeIndex, int componentCount, int type, int relativeOffset);
+
+    void setVertexArrayFloatAttributeFormat(int vertexArray, int attributeIndex, int componentCount, int type, boolean normalized, int relativeOffset);
+
     void deleteVertexArray(int handle);
 
     void memoryBarrier(int barrierFlags);
