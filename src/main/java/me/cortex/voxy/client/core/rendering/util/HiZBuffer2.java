@@ -3,6 +3,7 @@ package me.cortex.voxy.client.core.rendering.util;
 import me.cortex.voxy.client.core.gl.GlFramebuffer;
 import me.cortex.voxy.client.core.gl.GlTexture;
 import me.cortex.voxy.client.core.gl.GlVertexArray;
+import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
 import me.cortex.voxy.client.core.gl.shader.Shader;
 import me.cortex.voxy.client.core.gl.shader.ShaderType;
 import org.lwjgl.opengl.GL11;
@@ -92,7 +93,7 @@ public class HiZBuffer2 {
 
             glBindTextureUnit(0, srcDepthTex);
             glBindSampler(0, this.sampler);
-            glUniform1i(0, 0);
+            GlBackendRuntime.requireBackend().setUniform1i(0, 0);
 
             glViewport(0, 0, this.width, this.height);
 
@@ -109,7 +110,7 @@ public class HiZBuffer2 {
         {//Compute based Mipping
             this.hizMip.bind();
 
-            glUniform2f(0, 1f/this.width, 1f/this.height);
+            GlBackendRuntime.requireBackend().setUniform2f(0, 1f/this.width, 1f/this.height);
             glBindTextureUnit(0, this.texture.id);
             glBindSampler(0, this.sampler);
             for (int i = 1; i < 7; i++) {
