@@ -18,10 +18,19 @@ public class BasicSectionGeometryData implements IGeometryData {
     public final boolean isExternalGeometryBuffer;
 
     private final int maxSectionCount;
+    private final boolean allowSparseBuffers;
     private int currentSectionCount;
 
     public BasicSectionGeometryData(int maxSectionCount, GlBuffer geometryBuffer) {
+        this(maxSectionCount, geometryBuffer, false);
+    }
+
+    public BasicSectionGeometryData(int maxSectionCount, GlBuffer geometryBuffer, boolean allowSparseBuffers) {
+        if (maxSectionCount <= 0) {
+            throw new IllegalArgumentException("maxSectionCount must be positive");
+        }
         this.maxSectionCount = maxSectionCount;
+        this.allowSparseBuffers = allowSparseBuffers;
         this.sectionMetadataBuffer = new GlBuffer((long) maxSectionCount * SECTION_METADATA_SIZE);
         //8 Cause a quad is 8 bytes
         if ((geometryBuffer.size()%8)!=0) {
@@ -32,6 +41,22 @@ public class BasicSectionGeometryData implements IGeometryData {
     }
 
     public BasicSectionGeometryData(int maxSectionCount, long geometryCapacity) {
+        this(maxSectionCount, geometryCapacity, true);
+    }
+
+    /**
+     * Creates an owned geometry buffer. Sparse allocation is optional because
+     * ARB_sparse_buffer is a desktop extension and is not part of GLES 3.x.
+     * When disabled, allocation is a single conventional buffer allocation.
+     */
+    public BasicSectionGeometryData(int maxSectionCount, long geometryCapacity, boolean allowSparseBuffers) {
+        if (maxSectionCount <= 0) {
+            throw new IllegalArgumentException("maxSectionCount must be positive");
+        }
+        if (geometryCapacity <= 0 || (geometryCapacity % 8) != 0) {
+            throw new IllegalArgumentException("geometryCapacity must be positive and aligned to 8 bytes");
+        }
+        this.allowSparseBuffers = allowSparseBuffers;
         this.isExternalGeometryBuffer = false;
         this.maxSectionCount = maxSectionCount;
         this.sectionMetadataBuffer = new GlBuffer((long) maxSectionCount * SECTION_METADATA_SIZE);
@@ -41,7 +66,7 @@ public class BasicSectionGeometryData implements IGeometryData {
         }
         long start = System.currentTimeMillis();
         String msg = "Creating and zeroing " + (geometryCapacity/(1024*1024)) + "MB geometry buffer";
-        if (Capabilities.INSTANCE.canQueryGpuMemory) {
+        if (allowSparseBuffers && Capabilities.INSTANCE.canQueryGpuMemory) {
             msg += " driver states " + (Capabilities.INSTANCE.getFreeDedicatedGpuMemory()/(1024*1024)) + "MB of free memory";
         }
         Logger.info(msg);
@@ -57,7 +82,7 @@ public class BasicSectionGeometryData implements IGeometryData {
         }
         int error = glGetError();
         if (error != GL_NO_ERROR || buffer == null) {
-            if ((buffer == null || error == GL_OUT_OF_MEMORY) && Capabilities.INSTANCE.sparseBuffer) {
+            if (allowSparseBuffers && (buffer == null || error == GL_OUT_OF_MEMORY) && Capabilities.INSTANCE.sparseBuffer) {
                 if (buffer != null) {
                     Logger.error("Failed to allocate geometry buffer, attempting workaround with sparse buffers");
                     buffer.free();
@@ -82,7 +107,7 @@ public class BasicSectionGeometryData implements IGeometryData {
     public void ensureAccessable(int maxElementAccess) {
         long size = (Integer.toUnsignedLong(maxElementAccess)*8L+65535L)&~65535L;
         //If we are a sparse buffer, ensure the memory upto the requested size is allocated
-        if (this.geometryBuffer.isSparse()) {
+        if (this.allowSparseBuffers && this.geometryBuffer.isSparse()) {
             if (this.sparseCommitment < size) {//if we try to access memory outside the allocation range, allocate it
                 glBindBuffer(GL_ARRAY_BUFFER, this.geometryBuffer.id);
                 size += 65536L*1024;//increase size by 64mb to prevent driver allocation thrashing
@@ -124,11 +149,11 @@ public class BasicSectionGeometryData implements IGeometryData {
         this.sectionMetadataBuffer.free();
 
         long gpuMemory = 0;
-        if (Capabilities.INSTANCE.canQueryGpuMemory) {
+        if (this.allowSparseBuffers && Capabilities.INSTANCE.canQueryGpuMemory) {
             glFinish();
             gpuMemory = Capabilities.INSTANCE.getFreeDedicatedGpuMemory();
         }
-        if (this.geometryBuffer.isSparse()) {
+        if (this.allowSparseBuffers && this.geometryBuffer.isSparse()) {
             glBindBuffer(GL_ARRAY_BUFFER, this.geometryBuffer.id);
             glBufferPageCommitmentARB(GL_ARRAY_BUFFER, 0, this.sparseCommitment, false);
             glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -139,7 +164,7 @@ public class BasicSectionGeometryData implements IGeometryData {
         if (!this.isExternalGeometryBuffer) {
             this.geometryBuffer.free();
             glFinish();
-            if (Capabilities.INSTANCE.canQueryGpuMemory) {
+            if (this.allowSparseBuffers && Capabilities.INSTANCE.canQueryGpuMemory) {
                 long releaseSize = (long) (this.geometryBuffer.size() * 0.75);//if gpu memory usage drops by 75% of the expected value assume we freed it
                 if (this.geometryBuffer.isSparse()) {//If we are using sparse buffers, use the commited size instead
                     releaseSize = (long) (this.sparseCommitment * 0.75);
