@@ -1,13 +1,12 @@
 package me.cortex.voxy.client.core.gl;
 
 import me.cortex.voxy.common.util.TrackedObject;
-
-import static org.lwjgl.opengl.GL45C.*;
+import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
 
 public class GlFramebuffer extends TrackedObject {
     public final int id;
     public GlFramebuffer() {
-        this.id = glCreateFramebuffers();
+        this.id = GlBackendRuntime.requireBackend().createFramebuffer();
     }
 
     public GlFramebuffer bind(int attachment, GlTexture texture) {
@@ -19,7 +18,7 @@ public class GlFramebuffer extends TrackedObject {
     }
 
     public GlFramebuffer bind(int attachment, int texture, int lvl) {
-        glNamedFramebufferTexture(this.id, attachment, texture, lvl);
+        GlBackendRuntime.requireBackend().attachTexture2D(this.id, attachment, texture, lvl);
         return this;
     }
 
@@ -29,24 +28,24 @@ public class GlFramebuffer extends TrackedObject {
     }
 
     public GlFramebuffer bind(int attachment, GlRenderBuffer buffer) {
-        glNamedFramebufferRenderbuffer(this.id, attachment, GL_RENDERBUFFER, buffer.id);
+        GlBackendRuntime.requireBackend().attachRenderbuffer(this.id, attachment, buffer.id);
         return this;
     }
 
     public GlFramebuffer setDrawBuffers(int... buffers) {
-        glNamedFramebufferDrawBuffers(this.id, buffers);
+        GlBackendRuntime.requireBackend().setFramebufferDrawBuffers(this.id, buffers);
         return this;
     }
 
     @Override
     public void free() {
         super.free0();
-        glDeleteFramebuffers(this.id);
+        GlBackendRuntime.requireBackend().deleteFramebuffer(this.id);
     }
 
     public GlFramebuffer verify() {
-        int code;
-        if ((code = glCheckNamedFramebufferStatus(this.id, GL_FRAMEBUFFER)) != GL_FRAMEBUFFER_COMPLETE) {
+        int code = GlBackendRuntime.requireBackend().getFramebufferStatus(this.id);
+        if (code != GL_FRAMEBUFFER_COMPLETE) {
             throw new IllegalStateException("Framebuffer incomplete with error code: " + code);
         }
         return this;
