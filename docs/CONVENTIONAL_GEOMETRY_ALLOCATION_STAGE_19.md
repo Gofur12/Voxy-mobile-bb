@@ -11,8 +11,8 @@ constructor overloads:
   conventional geometry-buffer allocation and does not probe desktop GPU
   vendor/memory capabilities or attempt ARB sparse commitment.
 - The external-buffer constructor also has an explicit `allowSparseBuffers`
-  overload. Its original signature defaults to sparse management disabled
-  because the class does not own the supplied geometry allocation.
+  overload. Its original signature preserves legacy sparse-buffer handling;
+  callers selecting a GLES path must explicitly pass `false`.
 
 The conventional mode still uses the existing `GlBuffer` abstraction for
 metadata and geometry storage. Its backend must therefore implement buffer
