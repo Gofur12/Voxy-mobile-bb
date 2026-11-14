@@ -14,10 +14,11 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 
 import static me.cortex.voxy.common.util.AllocationArena.SIZE_LIMIT;
-import static org.lwjgl.opengl.ARBMapBufferRange.*;
-import static org.lwjgl.opengl.GL11.glFinish;
-import static org.lwjgl.opengl.GL44.GL_CLIENT_STORAGE_BIT;
-import static org.lwjgl.opengl.GL44.GL_MAP_COHERENT_BIT;
+import static org.lwjgl.opengl.GL30C.GL_MAP_WRITE_BIT;
+import static org.lwjgl.opengl.GL30C.GL_MAP_UNSYNCHRONIZED_BIT;
+import static org.lwjgl.opengl.GL30C.GL_MAP_FLUSH_EXPLICIT_BIT;
+import static org.lwjgl.opengl.GL44C.GL_CLIENT_STORAGE_BIT;
+import static org.lwjgl.opengl.GL44C.GL_MAP_COHERENT_BIT;
 
 public class UploadStream {
     // Upload offsets are copied into target buffers; they are not SSBO binding offsets.
@@ -112,14 +113,14 @@ public class UploadStream {
         long addr;
         if (this.caddr == -1 || !this.allocationArena.expand(this.caddr, size)) {
             if ((!USE_COHERENT) && this.caddr != -1) {
-                org.lwjgl.opengl.GL45C.glFlushMappedNamedBufferRange(this.uploadBuffer.id, this.caddr, this.offset);
+                GlBackendRuntime.requireBackend().flushMappedBufferRange(this.uploadBuffer.id, this.caddr, this.offset);
             }
             this.caddr = this.allocationArena.alloc(size);
             if (this.caddr == SIZE_LIMIT) {
                 Logger.error("Upload stream full, preemptively waiting for old upload frames");
                 int attempts = 10;
                 while (--attempts != 0 && this.caddr == SIZE_LIMIT) {
-                    glFinish();
+                    GlBackendRuntime.requireBackend().finish();
                     this.tick(false);
                     this.caddr = this.allocationArena.alloc(size);
                 }
@@ -157,14 +158,14 @@ public class UploadStream {
         }
 
         if ((!USE_COHERENT) && this.caddr != -1) {
-            org.lwjgl.opengl.GL45C.glFlushMappedNamedBufferRange(this.uploadBuffer.id, this.caddr, this.offset);
+            GlBackendRuntime.requireBackend().flushMappedBufferRange(this.uploadBuffer.id, this.caddr, this.offset);
         }
         if (this.uploadList.isEmpty()) {
             return;
         }
         GlBackendRuntime.requireBackend().memoryBarrier(0x00000200); // GL_BUFFER_UPDATE_BARRIER_BIT
         for (var entry : this.uploadList) {
-            org.lwjgl.opengl.ARBDirectStateAccess.glCopyNamedBufferSubData(this.uploadBuffer.id, entry.target.id,
+            GlBackendRuntime.requireBackend().copyBufferSubData(this.uploadBuffer.id, entry.target.id,
                     entry.uploadOffset, entry.targetOffset, entry.size);
         }
         this.uploadList.clear();
