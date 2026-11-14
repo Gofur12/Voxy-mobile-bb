@@ -1,7 +1,6 @@
 package me.cortex.voxy.client.core.gl.backend.desktop;
 
 import me.cortex.voxy.client.core.gl.backend.GlBackend;
-import me.cortex.voxy.client.core.gl.backend.GlBufferUsage;
 import me.cortex.voxy.client.core.gl.backend.GlCapabilities;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11C;
@@ -56,26 +55,33 @@ public final class DesktopGlBackend implements GlBackend {
     }
 
     @Override
-    public int createBuffer(long size, int usageFlags) {
+    public int createBuffer(long size, long initialDataAddress, int storageFlags) {
         if (size <= 0) {
             throw new IllegalArgumentException("Buffer size must be positive");
         }
-        if (usageFlags != GlBufferUsage.STATIC
-                && usageFlags != GlBufferUsage.DYNAMIC
-                && usageFlags != GlBufferUsage.STREAM) {
-            throw new IllegalArgumentException("Unknown backend-neutral buffer usage: " + usageFlags);
-        }
-
         int buffer = GL45C.glCreateBuffers();
         try {
-            // Keep sub-data uploads legal for all usage hints. The usage value
-            // remains a policy hint, not an immutable-storage access mask.
-            GL45C.glNamedBufferStorage(buffer, size, GL45C.GL_DYNAMIC_STORAGE_BIT);
+            GL45C.nglNamedBufferStorage(buffer, size, initialDataAddress, storageFlags);
             return buffer;
         } catch (RuntimeException | Error failure) {
             GL15C.glDeleteBuffers(buffer);
             throw failure;
         }
+    }
+
+    @Override
+    public void clearBuffer(int handle, int internalFormat, int format, int type, long dataAddress) {
+        GL45C.nglClearNamedBufferData(handle, internalFormat, format, type, dataAddress);
+    }
+
+    @Override
+    public void clearBufferRange(int handle, int internalFormat, long offset, long size, int format, int type, long dataAddress) {
+        GL45C.nglClearNamedBufferSubData(handle, internalFormat, offset, size, format, type, dataAddress);
+    }
+
+    @Override
+    public void pixelStore(int parameter, int value) {
+        GL11C.glPixelStorei(parameter, value);
     }
 
     @Override
