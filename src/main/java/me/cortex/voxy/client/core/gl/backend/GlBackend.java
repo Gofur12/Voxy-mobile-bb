@@ -27,6 +27,16 @@ public interface GlBackend extends AutoCloseable {
 
     void uploadBuffer(int handle, long offset, long size, long sourceAddress);
 
+    long mapBufferRange(int handle, long offset, long length, int accessFlags);
+
+    boolean unmapBuffer(int handle);
+
+    long createFence();
+
+    boolean isFenceSignaled(long fence);
+
+    void deleteFence(long fence);
+
     void bindBuffer(int target, int handle);
 
     int createTexture(int target);
