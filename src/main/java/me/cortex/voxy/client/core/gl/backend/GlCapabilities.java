@@ -58,6 +58,17 @@ public final class GlCapabilities {
         this.syncObjects = syncObjects;
     }
 
+    /**
+     * Minimum context-version gate for a future GLES 3.x raster renderer.
+     *
+     * This only confirms the API generation. It does not claim that a GLES
+     * renderer exists or that desktop-only resource/shader code is portable.
+     */
+    public boolean supportsGles3BasicRasterPath() {
+        return this.embeddedProfile
+                && (this.majorVersion > 3 || (this.majorVersion == 3 && this.minorVersion >= 0));
+    }
+
     public boolean supportsComputeLodPath() {
         return this.computeShaders && this.shaderStorageBuffers && this.imageLoadStore;
     }
