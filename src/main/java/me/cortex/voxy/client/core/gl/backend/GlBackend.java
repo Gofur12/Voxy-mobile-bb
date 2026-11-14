@@ -15,6 +15,34 @@ public interface GlBackend extends AutoCloseable {
 
     GlCapabilities capabilities();
 
+    int createShader(int shaderType);
+
+    void setShaderSource(int shader, String source);
+
+    void compileShader(int shader);
+
+    boolean isShaderCompiled(int shader);
+
+    String getShaderInfoLog(int shader);
+
+    void deleteShader(int shader);
+
+    int createProgram();
+
+    void attachShader(int program, int shader);
+
+    void detachShader(int program, int shader);
+
+    void linkProgram(int program);
+
+    boolean isProgramLinked(int program);
+
+    String getProgramInfoLog(int program);
+
+    void deleteProgram(int program);
+
+    void useProgram(int program);
+
     int createBuffer(long size, long initialDataAddress, int storageFlags);
 
     void clearBuffer(int handle, int internalFormat, int format, int type, long dataAddress);
