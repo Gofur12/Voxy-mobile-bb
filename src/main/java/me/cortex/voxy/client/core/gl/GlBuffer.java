@@ -2,13 +2,18 @@ package me.cortex.voxy.client.core.gl;
 
 import me.cortex.voxy.common.util.MemoryBuffer;
 import me.cortex.voxy.common.util.TrackedObject;
-import org.lwjgl.opengl.GL11;
+import me.cortex.voxy.client.core.gl.backend.GlBackend;
+import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
 import org.lwjgl.system.MemoryUtil;
 
 import static org.lwjgl.opengl.ARBSparseBuffer.GL_SPARSE_STORAGE_BIT_ARB;
 import static org.lwjgl.opengl.GL11.GL_UNSIGNED_BYTE;
-import static org.lwjgl.opengl.GL15.glDeleteBuffers;
-import static org.lwjgl.opengl.GL45C.*;
+import static org.lwjgl.opengl.GL11.GL_UNPACK_SKIP_PIXELS;
+import static org.lwjgl.opengl.GL11.GL_UNPACK_SKIP_ROWS;
+import static org.lwjgl.opengl.GL30.GL_RED_INTEGER;
+import static org.lwjgl.opengl.GL30.GL_R8UI;
+import static org.lwjgl.opengl.GL30.GL_R32UI;
+import static org.lwjgl.opengl.GL30.GL_UNSIGNED_INT;
 
 public class GlBuffer extends TrackedObject {
     public final int id;
@@ -40,9 +45,8 @@ public class GlBuffer extends TrackedObject {
 
     private GlBuffer(long size, int flags, boolean zero, long data) {
         this.flags = flags;
-        this.id = glCreateBuffers();
         this.size = size;
-        nglNamedBufferStorage(this.id, size, data, flags);
+        this.id = GlBackendRuntime.requireBackend().createBuffer(size, data, flags);
         if ((flags&GL_SPARSE_STORAGE_BIT_ARB)==0 && zero) {
             this.zero();
         }
@@ -54,7 +58,7 @@ public class GlBuffer extends TrackedObject {
     @Override
     public void free() {
         this.free0();
-        glDeleteBuffers(this.id);
+        GlBackendRuntime.requireBackend().deleteBuffer(this.id);
 
         COUNT--;
         TOTAL_SIZE -= this.size;
@@ -69,23 +73,24 @@ public class GlBuffer extends TrackedObject {
     }
 
     public GlBuffer zero() {
-        nglClearNamedBufferData(this.id, GL_R8UI, GL_RED_INTEGER, GL_UNSIGNED_BYTE, 0);
+        GlBackendRuntime.requireBackend().clearBuffer(this.id, GL_R8UI, GL_RED_INTEGER, GL_UNSIGNED_BYTE, 0);
         return this;
     }
 
     public GlBuffer zeroRange(long offset, long size) {
-        nglClearNamedBufferSubData(this.id, GL_R8UI, offset, size, GL_RED_INTEGER, GL_UNSIGNED_BYTE, 0);
+        GlBackendRuntime.requireBackend().clearBufferRange(this.id, GL_R8UI, offset, size, GL_RED_INTEGER, GL_UNSIGNED_BYTE, 0);
         return this;
     }
 
     public GlBuffer fill(int data) {
         //Clear unpack values
         //Fixed in mesa commit a5c3c452
-        glPixelStorei(GL11.GL_UNPACK_SKIP_ROWS, 0);
-        glPixelStorei(GL11.GL_UNPACK_SKIP_PIXELS, 0);
+        GlBackend backend = GlBackendRuntime.requireBackend();
+        backend.pixelStore(GL_UNPACK_SKIP_ROWS, 0);
+        backend.pixelStore(GL_UNPACK_SKIP_PIXELS, 0);
 
         MemoryUtil.memPutInt(SCRATCH, data);
-        nglClearNamedBufferData(this.id, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, SCRATCH);
+        backend.clearBuffer(this.id, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, SCRATCH);
         return this;
     }
 
