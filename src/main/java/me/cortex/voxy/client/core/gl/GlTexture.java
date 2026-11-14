@@ -5,7 +5,6 @@ import me.cortex.voxy.common.util.TrackedObject;
 import static org.lwjgl.opengl.GL11.GL_RGBA8;
 import static org.lwjgl.opengl.GL11C.*;
 import static org.lwjgl.opengl.GL30.GL_DEPTH24_STENCIL8;
-import static org.lwjgl.opengl.GL45C.*;
 
 public class GlTexture extends TrackedObject {
     public final int id;
@@ -29,12 +28,8 @@ public class GlTexture extends TrackedObject {
         COUNT++;
     }
 
-    private GlTexture(int type, boolean useGenTypes) {
-        if (useGenTypes) {
-            this.id = glGenTextures();
-        } else {
-            this.id = glCreateTextures(type);
-        }
+    private GlTexture(int type, int existingId) {
+        this.id = existingId;
         this.type = type;
         COUNT++;
     }
@@ -60,9 +55,9 @@ public class GlTexture extends TrackedObject {
 
     public GlTexture createView() {
         this.assertAllocated();
-        var view = new GlTexture(this.type, true);
-        glTextureView(view.id, this.type, this.id, this.format, 0, 1, 0, 1);
-        return view;
+        int viewId = GlBackendRuntime.requireBackend().createTextureView(
+                this.id, this.type, this.format, 0, 1, 0, 1);
+        return new GlTexture(this.type, viewId);
     }
 
     @Override
@@ -149,7 +144,8 @@ public class GlTexture extends TrackedObject {
             default -> throw new IllegalStateException("Unknown format");
         };
         for (int lvl = 0; lvl < this.levels; lvl++) {
-            nglClearTexImage(this.id, lvl, this.getPixelTransferFormat(), type, 0);
+            GlBackendRuntime.requireBackend().clearTextureImage(
+                    this.id, lvl, this.getPixelTransferFormat(), type, 0);
         }
         return this;
     }
