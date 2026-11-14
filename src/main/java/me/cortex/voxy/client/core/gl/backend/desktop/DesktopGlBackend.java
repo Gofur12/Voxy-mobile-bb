@@ -103,8 +103,27 @@ public final class DesktopGlBackend implements GlBackend {
     }
 
     @Override
-    public int createTexture2D() {
-        return GL45C.glCreateTextures(GL11C.GL_TEXTURE_2D);
+    public int createTexture(int target) {
+        return GL45C.glCreateTextures(target);
+    }
+
+    @Override
+    public int createTextureView(int source, int target, int internalFormat,
+                                 int minLevel, int levelCount, int minLayer, int layerCount) {
+        int view = GL11C.glGenTextures();
+        try {
+            GL45C.glTextureView(view, target, source, internalFormat,
+                    minLevel, levelCount, minLayer, layerCount);
+            return view;
+        } catch (RuntimeException | Error failure) {
+            GL11C.glDeleteTextures(view);
+            throw failure;
+        }
+    }
+
+    @Override
+    public void clearTextureImage(int handle, int level, int format, int type, long dataAddress) {
+        GL45C.nglClearTexImage(handle, level, format, type, dataAddress);
     }
 
     @Override
