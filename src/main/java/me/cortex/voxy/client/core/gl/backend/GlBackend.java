@@ -43,6 +43,9 @@ public interface GlBackend extends AutoCloseable {
 
     void useProgram(int program);
 
+    /** Sets an integer uniform on the currently bound program. */
+    void setUniform1i(int location, int value);
+
     int createBuffer(long size, long initialDataAddress, int storageFlags);
 
     void clearBuffer(int handle, int internalFormat, int format, int type, long dataAddress);
