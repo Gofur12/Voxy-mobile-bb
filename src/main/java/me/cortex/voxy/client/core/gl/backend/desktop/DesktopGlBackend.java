@@ -6,6 +6,7 @@ import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11C;
 import org.lwjgl.opengl.GL15C;
 import org.lwjgl.opengl.GL30C;
+import org.lwjgl.opengl.GL32C;
 import org.lwjgl.opengl.GL42C;
 import org.lwjgl.opengl.GL45C;
 
@@ -95,6 +96,37 @@ public final class DesktopGlBackend implements GlBackend {
             throw new IllegalArgumentException("Invalid buffer upload range or source address");
         }
         GL45C.nglNamedBufferSubData(handle, offset, size, sourceAddress);
+    }
+
+    @Override
+    public long mapBufferRange(int handle, long offset, long length, int accessFlags) {
+        if (offset < 0 || length <= 0) throw new IllegalArgumentException("Invalid mapped buffer range");
+        return GL45C.nglMapNamedBufferRange(handle, offset, length, accessFlags);
+    }
+
+    @Override
+    public boolean unmapBuffer(int handle) {
+        return GL45C.glUnmapNamedBuffer(handle);
+    }
+
+    @Override
+    public long createFence() {
+        long fence = GL32C.glFenceSync(GL32C.GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+        if (fence == 0L) throw new IllegalStateException("Failed to create GPU fence");
+        return fence;
+    }
+
+    @Override
+    public boolean isFenceSignaled(long fence) {
+        int result = GL32C.glClientWaitSync(fence, 0, 0L);
+        if (result == GL32C.GL_ALREADY_SIGNALED || result == GL32C.GL_CONDITION_SATISFIED) return true;
+        if (result == GL32C.GL_TIMEOUT_EXPIRED) return false;
+        throw new IllegalStateException("GPU fence wait failed with status: " + result);
+    }
+
+    @Override
+    public void deleteFence(long fence) {
+        GL32C.glDeleteSync(fence);
     }
 
     @Override
