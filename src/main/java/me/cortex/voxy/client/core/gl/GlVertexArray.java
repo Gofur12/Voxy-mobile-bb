@@ -6,7 +6,6 @@ import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
 import java.util.Arrays;
 
 import static org.lwjgl.opengl.GL30.glGenVertexArrays;
-import static org.lwjgl.opengl.GL45C.*;
 
 public class GlVertexArray extends TrackedObject {
     public static final int STATIC_VAO = glGenVertexArrays();
@@ -59,7 +58,7 @@ public class GlVertexArray extends TrackedObject {
 
     public GlVertexArray setF(int index, int type, int count, boolean normalize, int offset) {
         this.addIndex(index);
-        glEnableVertexArrayAttrib(this.id, index);
+        GlBackendRuntime.requireBackend().enableVertexArrayAttribute(this.id, index);
         GlBackendRuntime.requireBackend().setVertexArrayFloatAttributeFormat(this.id, index, count, type, normalize, offset);
         return this;
     }
