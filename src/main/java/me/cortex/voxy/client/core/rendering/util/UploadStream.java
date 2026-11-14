@@ -27,6 +27,7 @@ public class UploadStream {
     private final AllocationArena allocationArena = new AllocationArena();
     private final GlPersistentMappedBuffer uploadBuffer;
     private final long cpuStagingAddress;
+    private final long capacity;
     private final boolean persistentMapping;
 
     private final Deque<UploadFrame> frames = new ArrayDeque<>();
@@ -39,6 +40,7 @@ public class UploadStream {
         if (size <= 0 || size > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("Upload stream size must be between 1 and Integer.MAX_VALUE");
         }
+        this.capacity = size;
         var capabilities = GlBackendRuntime.requireBackend().capabilities();
         this.persistentMapping = capabilities.bufferStorage && capabilities.persistentMapping;
         if (this.persistentMapping) {
@@ -89,6 +91,9 @@ public class UploadStream {
     public long rawUploadAddress(int size) {
         if (size < 0) {
             throw new IllegalStateException("Negative size");
+        }
+        if (size == 0) {
+            throw new IllegalArgumentException("Zero-sized upload allocations are not supported");
         }
         size = alignUp(size, BASE_ALLOCATION_ALIGNEMENT);
         if (size > (this.persistentMapping ? this.uploadBuffer.size() : this.allocationArena.getLimit())) {
@@ -145,12 +150,9 @@ public class UploadStream {
             this.uploadList.clear();
             // uploadBuffer is a synchronous client-memory upload call: once it returns,
             // the source bytes may be reused without a GPU fence.
-            for (int i = 0; i < this.thisFrameAllocations.size(); i++) {
-                this.allocationArena.free(this.thisFrameAllocations.getLong(i));
-            }
             this.thisFrameAllocations.clear();
             this.allocationArena.reset();
-            this.allocationArena.setLimit(MemoryUtil.getAddressSafe(this.cpuStagingAddress) == 0L ? 0 : this.allocationArena.getLimit());
+            this.allocationArena.setLimit(this.capacity);
             return;
         }
 
