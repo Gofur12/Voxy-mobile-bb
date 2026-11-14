@@ -199,6 +199,14 @@ public final class DesktopGlBackend implements GlBackend {
     }
 
     @Override
+    public void copyBufferSubData(int source, int destination, long sourceOffset, long destinationOffset, long size) {
+        if (sourceOffset < 0 || destinationOffset < 0 || size < 0) {
+            throw new IllegalArgumentException("Invalid buffer copy range");
+        }
+        GL45C.glCopyNamedBufferSubData(source, destination, sourceOffset, destinationOffset, size);
+    }
+
+    @Override
     public long mapBufferRange(int handle, long offset, long length, int accessFlags) {
         if (offset < 0 || length <= 0) throw new IllegalArgumentException("Invalid mapped buffer range");
         return GL45C.nglMapNamedBufferRange(handle, offset, length, accessFlags);
