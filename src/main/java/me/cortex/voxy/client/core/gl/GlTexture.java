@@ -1,10 +1,12 @@
 package me.cortex.voxy.client.core.gl;
 
 import me.cortex.voxy.common.util.TrackedObject;
+import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
 
 import static org.lwjgl.opengl.GL11.GL_RGBA8;
 import static org.lwjgl.opengl.GL11C.*;
 import static org.lwjgl.opengl.GL30.GL_DEPTH24_STENCIL8;
+import static org.lwjgl.opengl.GL45C.*;
 
 public class GlTexture extends TrackedObject {
     public final int id;
@@ -23,7 +25,7 @@ public class GlTexture extends TrackedObject {
     }
 
     public GlTexture(int type) {
-        this.id = glCreateTextures(type);
+        this.id = GlBackendRuntime.requireBackend().createTexture(type);
         this.type = type;
         COUNT++;
     }
@@ -42,7 +44,7 @@ public class GlTexture extends TrackedObject {
 
         this.format = format;
         if (this.type == GL_TEXTURE_2D) {
-            glTextureStorage2D(this.id, levels, format, width, height);
+            GlBackendRuntime.requireBackend().allocateTexture2D(this.id, levels, format, width, height);
             this.width = width;
             this.height = height;
             this.levels = levels;
@@ -68,7 +70,7 @@ public class GlTexture extends TrackedObject {
         COUNT--;
         this.hasAllocated = false;
         super.free0();
-        glDeleteTextures(this.id);
+        GlBackendRuntime.requireBackend().deleteTexture(this.id);
     }
 
     public GlTexture name(String name) {
