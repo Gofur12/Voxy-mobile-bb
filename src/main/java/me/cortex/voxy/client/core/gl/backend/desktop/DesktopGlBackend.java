@@ -196,6 +196,31 @@ public final class DesktopGlBackend implements GlBackend {
     }
 
     @Override
+    public void bindVertexArrayVertexBuffer(int vertexArray, int bindingIndex, int buffer, long offset, int stride) {
+        GL45C.glVertexArrayVertexBuffer(vertexArray, bindingIndex, buffer, offset, stride);
+    }
+
+    @Override
+    public void bindVertexArrayElementBuffer(int vertexArray, int buffer) {
+        GL45C.glVertexArrayElementBuffer(vertexArray, buffer);
+    }
+
+    @Override
+    public void enableVertexArrayAttribute(int vertexArray, int attributeIndex) {
+        GL45C.glEnableVertexArrayAttrib(vertexArray, attributeIndex);
+    }
+
+    @Override
+    public void setVertexArrayIntegerAttributeFormat(int vertexArray, int attributeIndex, int componentCount, int type, int relativeOffset) {
+        GL45C.glVertexArrayAttribIFormat(vertexArray, attributeIndex, componentCount, type, relativeOffset);
+    }
+
+    @Override
+    public void setVertexArrayFloatAttributeFormat(int vertexArray, int attributeIndex, int componentCount, int type, boolean normalized, int relativeOffset) {
+        GL45C.glVertexArrayAttribFormat(vertexArray, attributeIndex, componentCount, type, normalized, relativeOffset);
+    }
+
+    @Override
     public void deleteVertexArray(int handle) {
         GL30C.glDeleteVertexArrays(handle);
     }
