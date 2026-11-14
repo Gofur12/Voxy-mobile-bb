@@ -209,9 +209,9 @@ public class DownloadStream {
             }
             return;
         }
-        glFinish();
+        GlBackendRuntime.requireBackend().finish();
         var fence = new GlFence();
-        glFinish();
+        GlBackendRuntime.requireBackend().finish();
         while (!fence.signaled()) Thread.onSpinWait();
         fence.free();
         while (!this.frames.isEmpty()) {
@@ -230,12 +230,12 @@ public class DownloadStream {
             }
             return;
         }
-        glFinish();
+        GlBackendRuntime.requireBackend().finish();
         this.tick();
         var fence = new GlFence();
-        glFinish();
+        GlBackendRuntime.requireBackend().finish();
         while (!fence.signaled()) {
-            glFinish();
+            GlBackendRuntime.requireBackend().finish();
             Thread.onSpinWait();
         }
         fence.free();
