@@ -62,10 +62,15 @@ public final class GlCapabilities {
         return this.computeShaders && this.shaderStorageBuffers && this.imageLoadStore;
     }
 
+    /**
+     * The current MDIC renderer is a desktop compute/indirect-draw pipeline.
+     * Keep this predicate conservative: an embedded context must never be
+     * selected for it, and every feature used by its GPU-driven path must be
+     * present before renderer construction is attempted.
+     */
     public boolean supportsDesktopMdicPath() {
         return !this.embeddedProfile
-                && this.computeShaders
-                && this.shaderStorageBuffers
+                && this.supportsComputeLodPath()
                 && this.multiDrawIndirect
                 && this.indirectParameters;
     }
