@@ -5,6 +5,7 @@ import me.cortex.voxy.client.core.gl.backend.GlCapabilities;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11C;
 import org.lwjgl.opengl.GL15C;
+import org.lwjgl.opengl.GL20C;
 import org.lwjgl.opengl.GL30C;
 import org.lwjgl.opengl.GL32C;
 import org.lwjgl.opengl.GL42C;
@@ -53,6 +54,76 @@ public final class DesktopGlBackend implements GlBackend {
     @Override
     public GlCapabilities capabilities() {
         return this.capabilities;
+    }
+
+    @Override
+    public int createShader(int shaderType) {
+        return GL20C.glCreateShader(shaderType);
+    }
+
+    @Override
+    public void setShaderSource(int shader, String source) {
+        GL20C.glShaderSource(shader, source);
+    }
+
+    @Override
+    public void compileShader(int shader) {
+        GL20C.glCompileShader(shader);
+    }
+
+    @Override
+    public boolean isShaderCompiled(int shader) {
+        return GL20C.glGetShaderi(shader, GL20C.GL_COMPILE_STATUS) == GL20C.GL_TRUE;
+    }
+
+    @Override
+    public String getShaderInfoLog(int shader) {
+        return GL20C.glGetShaderInfoLog(shader);
+    }
+
+    @Override
+    public void deleteShader(int shader) {
+        GL20C.glDeleteShader(shader);
+    }
+
+    @Override
+    public int createProgram() {
+        return GL20C.glCreateProgram();
+    }
+
+    @Override
+    public void attachShader(int program, int shader) {
+        GL20C.glAttachShader(program, shader);
+    }
+
+    @Override
+    public void detachShader(int program, int shader) {
+        GL20C.glDetachShader(program, shader);
+    }
+
+    @Override
+    public void linkProgram(int program) {
+        GL20C.glLinkProgram(program);
+    }
+
+    @Override
+    public boolean isProgramLinked(int program) {
+        return GL20C.glGetProgrami(program, GL20C.GL_LINK_STATUS) == GL20C.GL_TRUE;
+    }
+
+    @Override
+    public String getProgramInfoLog(int program) {
+        return GL20C.glGetProgramInfoLog(program);
+    }
+
+    @Override
+    public void deleteProgram(int program) {
+        GL20C.glDeleteProgram(program);
+    }
+
+    @Override
+    public void useProgram(int program) {
+        GL20C.glUseProgram(program);
     }
 
     @Override
