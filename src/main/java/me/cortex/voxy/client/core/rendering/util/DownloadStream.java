@@ -125,27 +125,30 @@ public class DownloadStream {
         }
 
         long mapped = 0L;
-        boolean mappingOpened = false;
-        boolean copyCompleted = false;
+        Throwable failure = null;
         try {
             mapped = backend.mapBufferRange(buffer.id, sourceOffset, size, GL_MAP_READ_BIT);
             if (mapped == 0L) {
                 throw new IllegalStateException("Backend returned a null pointer for a readable buffer mapping");
             }
-            mappingOpened = true;
             MemoryUtil.memCopy(mapped, destination, size);
-            copyCompleted = true;
+        } catch (RuntimeException | Error readbackFailure) {
+            failure = readbackFailure;
         } finally {
-            boolean contentsValid = true;
-            if (mappingOpened) {
-                contentsValid = backend.unmapBuffer(buffer.id);
+            if (mapped != 0L) {
+                try {
+                    if (!backend.unmapBuffer(buffer.id)) {
+                        failure = appendFailure(failure,
+                                new IllegalStateException("GPU buffer contents became invalid while unmapping readback range"));
+                    }
+                } catch (RuntimeException | Error unmapFailure) {
+                    failure = appendFailure(failure, unmapFailure);
+                }
             }
-            if (!copyCompleted || !contentsValid) {
-                MemoryUtil.nmemFree(destination);
-            }
-            if (!contentsValid) {
-                throw new IllegalStateException("GPU buffer contents became invalid while unmapping readback range");
-            }
+        }
+        if (failure != null) {
+            MemoryUtil.nmemFree(destination);
+            rethrowFailure(failure);
         }
         this.cpuDownloads.add(new CpuDownload(destination, size, consumer));
     }
@@ -170,14 +173,18 @@ public class DownloadStream {
 
     public void tick() {
         if (!this.persistentMapping) {
+            Throwable failure = null;
             while (!this.cpuDownloads.isEmpty()) {
                 CpuDownload download = this.cpuDownloads.removeFirst();
                 try {
                     download.resultConsumer.consume(download.address, download.size);
+                } catch (RuntimeException | Error callbackFailure) {
+                    failure = appendFailure(failure, callbackFailure);
                 } finally {
                     MemoryUtil.nmemFree(download.address);
                 }
             }
+            rethrowFailure(failure);
             return;
         }
 
@@ -188,17 +195,30 @@ public class DownloadStream {
             this.thisFrameDownloadList.clear();
         }
 
+        Throwable failure = null;
         while (!this.frames.isEmpty()) {
-            if (!this.frames.peek().fence.signaled()) {
-                break;
-            }
-            var frame = this.frames.pop();
+            DownloadFrame frame = this.frames.peekFirst();
+            if (!frame.fence.signaled()) break;
+            this.frames.removeFirst();
             for (var data : frame.data) {
-                data.resultConsumer.consume(this.downloadBuffer.addr() + data.downloadStreamOffset, data.size);
+                try {
+                    data.resultConsumer.consume(this.downloadBuffer.addr() + data.downloadStreamOffset, data.size);
+                } catch (RuntimeException | Error callbackFailure) {
+                    failure = appendFailure(failure, callbackFailure);
+                }
             }
-            frame.allocations.forEach(this.allocationArena::free);
-            frame.fence.free();
+            try {
+                frame.allocations.forEach(this.allocationArena::free);
+            } catch (RuntimeException | Error cleanupFailure) {
+                failure = appendFailure(failure, cleanupFailure);
+            }
+            try {
+                frame.fence.free();
+            } catch (RuntimeException | Error cleanupFailure) {
+                failure = appendFailure(failure, cleanupFailure);
+            }
         }
+        rethrowFailure(failure);
     }
 
     // Synchronous fallback has already completed its GPU readback by this point.
@@ -209,17 +229,54 @@ public class DownloadStream {
             }
             return;
         }
+
         GlBackendRuntime.requireBackend().finish();
-        var fence = new GlFence();
-        GlBackendRuntime.requireBackend().finish();
-        while (!fence.signaled()) Thread.onSpinWait();
-        fence.free();
-        while (!this.frames.isEmpty()) {
-            var frame = this.frames.pop();
-            while (!frame.fence.signaled()) Thread.onSpinWait();
-            frame.allocations.forEach(this.allocationArena::free);
-            frame.fence.free();
+
+        // The GPU is idle now: discard queued callbacks and release every
+        // allocation, including copies committed since the last tick/fence.
+        this.downloadList.clear();
+        this.thisFrameDownloadList.clear();
+        Throwable failure = null;
+        for (int i = 0; i < this.thisFrameAllocations.size(); i++) {
+            try {
+                this.allocationArena.free(this.thisFrameAllocations.getLong(i));
+            } catch (RuntimeException | Error cleanupFailure) {
+                failure = appendFailure(failure, cleanupFailure);
+            }
         }
+        this.thisFrameAllocations.clear();
+        this.caddr = -1;
+        this.offset = 0;
+
+        while (!this.frames.isEmpty()) {
+            DownloadFrame frame = this.frames.removeFirst();
+            for (int i = 0; i < frame.allocations.size(); i++) {
+                try {
+                    this.allocationArena.free(frame.allocations.getLong(i));
+                } catch (RuntimeException | Error cleanupFailure) {
+                    failure = appendFailure(failure, cleanupFailure);
+                }
+            }
+            try {
+                frame.fence.free();
+            } catch (RuntimeException | Error cleanupFailure) {
+                failure = appendFailure(failure, cleanupFailure);
+            }
+        }
+        rethrowFailure(failure);
+    }
+
+    private static Throwable appendFailure(Throwable first, Throwable next) {
+        if (first == null) return next;
+        if (first != next) first.addSuppressed(next);
+        return first;
+    }
+
+    private static void rethrowFailure(Throwable failure) {
+        if (failure == null) return;
+        if (failure instanceof RuntimeException runtimeFailure) throw runtimeFailure;
+        if (failure instanceof Error errorFailure) throw errorFailure;
+        throw new IllegalStateException(failure);
     }
 
     public void flushWaitClear() {
