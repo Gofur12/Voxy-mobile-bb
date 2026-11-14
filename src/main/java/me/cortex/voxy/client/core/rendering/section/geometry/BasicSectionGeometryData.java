@@ -22,7 +22,7 @@ public class BasicSectionGeometryData implements IGeometryData {
     private int currentSectionCount;
 
     public BasicSectionGeometryData(int maxSectionCount, GlBuffer geometryBuffer) {
-        this(maxSectionCount, geometryBuffer, false);
+        this(maxSectionCount, geometryBuffer, true);
     }
 
     public BasicSectionGeometryData(int maxSectionCount, GlBuffer geometryBuffer, boolean allowSparseBuffers) {
