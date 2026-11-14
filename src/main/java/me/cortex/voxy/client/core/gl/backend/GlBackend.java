@@ -15,7 +15,13 @@ public interface GlBackend extends AutoCloseable {
 
     GlCapabilities capabilities();
 
-    int createBuffer(long size, int usageFlags);
+    int createBuffer(long size, long initialDataAddress, int storageFlags);
+
+    void clearBuffer(int handle, int internalFormat, int format, int type, long dataAddress);
+
+    void clearBufferRange(int handle, int internalFormat, long offset, long size, int format, int type, long dataAddress);
+
+    void pixelStore(int parameter, int value);
 
     void deleteBuffer(int handle);
 
