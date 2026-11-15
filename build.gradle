@@ -50,7 +50,7 @@ if (voxyTarget == "1.20.1") {
                         "me/cortex/voxy/client/taskbar/Taskbar.java",
                         "me/cortex/voxy/commonImpl/importers/WorldImporter.java",
                         "me/cortex/voxy/commonImpl/importers/DHImporter.java"
-                    ].contains(element.path)
+                    ].contains(element.path) || file("src/1.20.1/java/" + element.path).exists()
                     def modernConfigOnly = [
                         "me/cortex/voxy/client/config/SodiumConfigBuilder.java",
                         "me/cortex/voxy/client/config/VoxyConfigMenu.java",

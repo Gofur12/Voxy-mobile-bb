@@ -1,2 +1,3 @@
 accessWidener v2 named
 accessible class net/minecraft/client/multiplayer/ClientChunkCache$Storage
+accessible field net/minecraft/world/level/block/StairBlock baseState Lnet/minecraft/world/level/block/state/BlockState;

@@ -13,6 +13,7 @@ import me.cortex.voxy.common.world.other.Mapper;
 import net.minecraft.core.Holder;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.biome.Biome;
@@ -227,7 +228,7 @@ public class DHImporter implements IDataImporter {
                 throw new IllegalStateException();
             {
                 var biomeRes = new ResourceLocation(encEntry.substring(0, idx));
-                var biome = this.biomeRegistry.getHolder(biomeRes).orElse(this.defaultBiome);
+                var biome = this.biomeRegistry.getHolder(ResourceKey.create(Registries.BIOME, biomeRes)).orElse(this.defaultBiome);
                 biomeId = this.engine.getMapper().getIdForBiome(biome);
             }
             {
