@@ -302,6 +302,22 @@ public final class DesktopGlBackend implements GlBackend {
     }
 
     @Override
+    public void uploadTexture2D(int handle, int level, int x, int y, int width, int height,
+                                int format, int type, long dataAddress) {
+        if (level < 0 || x < 0 || y < 0 || width <= 0 || height <= 0 || dataAddress == 0L) {
+            throw new IllegalArgumentException("Invalid 2D texture upload arguments");
+        }
+        int previousBinding = GL11C.glGetInteger(GL11C.GL_TEXTURE_BINDING_2D);
+        try {
+            GL11C.glBindTexture(GL11C.GL_TEXTURE_2D, handle);
+            GL11C.nglTexSubImage2D(GL11C.GL_TEXTURE_2D, level, x, y, width, height,
+                    format, type, dataAddress);
+        } finally {
+            GL11C.glBindTexture(GL11C.GL_TEXTURE_2D, previousBinding);
+        }
+    }
+
+    @Override
     public void deleteTexture(int handle) {
         GL11C.glDeleteTextures(handle);
     }
