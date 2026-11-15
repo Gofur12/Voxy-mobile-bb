@@ -206,10 +206,10 @@ public class Shader extends TrackedObject {
         }
 
         private static void validateShaderVersion(GlCapabilities capabilities, ShaderType type, String source) {
-            int lineEnd = source.indexOf('\\n');
+            int lineEnd = source.indexOf('\n');
             String versionLine = lineEnd < 0 ? source : source.substring(0, lineEnd);
             java.util.regex.Matcher matcher = java.util.regex.Pattern
-                    .compile("#version\\\\s+(\\\\d+)(?:\\\\s+(core|compatibility|es))?")
+                    .compile("#version\\s+(\\d+)(?:\\s+(core|compatibility|es))?")
                     .matcher(versionLine.trim());
             if (!matcher.matches()) {
                 throw new IllegalArgumentException("Invalid or missing GLSL version directive for " + type
