@@ -160,6 +160,7 @@ public class GlBuffer extends TrackedObject {
     }
 
     public GlBuffer name(String name) {
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlBuffer");
         return GlDebug.name(name, this);
     }
 }
