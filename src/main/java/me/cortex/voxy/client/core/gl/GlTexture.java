@@ -16,6 +16,7 @@ public class GlTexture extends TrackedObject {
     private int height;
     private int levels;
     private boolean hasAllocated;
+    private final long contextGeneration;
 
     private static int COUNT;
     private static long ESTIMATED_TOTAL_SIZE;
@@ -26,12 +27,14 @@ public class GlTexture extends TrackedObject {
 
     public GlTexture(int type) {
         this.id = GlBackendRuntime.requireBackend().createTexture(type);
+        this.contextGeneration = GlBackendRuntime.getContextGeneration();
         this.type = type;
         COUNT++;
     }
 
     private GlTexture(int type, int existingId) {
         this.id = existingId;
+        this.contextGeneration = GlBackendRuntime.getContextGeneration();
         this.type = type;
         COUNT++;
     }
@@ -53,7 +56,7 @@ public class GlTexture extends TrackedObject {
 
         long estimatedSize = this.estimateSize(format, levels, width, height);
         long updatedEstimatedTotal = Math.addExact(ESTIMATED_TOTAL_SIZE, estimatedSize);
-        GlBackendRuntime.requireBackend().allocateTexture2D(this.id, levels, format, width, height);
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlTexture").allocateTexture2D(this.id, levels, format, width, height);
 
         // Publish wrapper state only after backend allocation succeeds.
         this.format = format;
@@ -67,7 +70,7 @@ public class GlTexture extends TrackedObject {
 
     public GlTexture createView() {
         this.assertAllocated();
-        int viewId = GlBackendRuntime.requireBackend().createTextureView(
+        int viewId = GlBackendRuntime.requireBackend(this.contextGeneration, "GlTexture").createTextureView(
                 this.id, this.type, this.format, 0, 1, 0, 1);
         return new GlTexture(this.type, viewId);
     }
@@ -79,7 +82,9 @@ public class GlTexture extends TrackedObject {
         this.hasAllocated = false;
         super.free0();
         try {
-            GlBackendRuntime.requireBackend().deleteTexture(this.id);
+            if (GlBackendRuntime.isContextGenerationCurrent(this.contextGeneration)) {
+                GlBackendRuntime.requireBackend(this.contextGeneration, "GlTexture").deleteTexture(this.id);
+            }
         } finally {
             COUNT--;
             if (allocated) ESTIMATED_TOTAL_SIZE -= estimatedSize;
@@ -162,7 +167,7 @@ public class GlTexture extends TrackedObject {
             default -> throw new IllegalStateException("Unknown format");
         };
         for (int lvl = 0; lvl < this.levels; lvl++) {
-            GlBackendRuntime.requireBackend().clearTextureImage(
+            GlBackendRuntime.requireBackend(this.contextGeneration, "GlTexture").clearTextureImage(
                     this.id, lvl, this.getPixelTransferFormat(), type, 0);
         }
         return this;
