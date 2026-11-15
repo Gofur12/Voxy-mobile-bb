@@ -267,9 +267,9 @@ dependencies {
     // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${voxyProperty("minecraft_version")}"
     if (voxyTarget == "1.20.1") {
-        // Loom's remapping pipeline and Fabric API access wideners use the named namespace.
-        // Use Yarn mappings so intermediary dependency metadata is remapped consistently.
-        mappings "net.fabricmc:yarn:1.20.1+build.10:v2"
+        // The Voxy source is written against Mojang official class and member names.
+        // Keep those names for compilation; the target-specific access widener is isolated.
+        mappings loom.officialMojangMappings()
     }
     implementation "net.fabricmc:fabric-loader:${voxyProperty("loader_version")}"
 
