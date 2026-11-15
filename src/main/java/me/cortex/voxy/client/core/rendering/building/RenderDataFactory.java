@@ -340,7 +340,7 @@ public class RenderDataFactory {
             //Note this is not thread safe! (but eh, fk it)
             var raw = sec._unsafeGetRawDataArray();
             for (int i = 0; i < 32*32; i++) {
-                this.neighboringFaces[i+32*32*4] = raw[Integer.expand(i,0b11111_00000_11111)|(0x1F<<5)];//pull the +z faces from the section
+                this.neighboringFaces[i+32*32*4] = raw[expandBits(i,0b11111_00000_11111)|(0x1F<<5)];//pull the +z faces from the section
             }
             sec.release(WorldSection.RELEASE_HINT_POSSIBLE_REUSE);
         }
@@ -349,10 +349,22 @@ public class RenderDataFactory {
             //Note this is not thread safe! (but eh, fk it)
             var raw = sec._unsafeGetRawDataArray();
             for (int i = 0; i < 32*32; i++) {
-                this.neighboringFaces[i+32*32*5] = raw[Integer.expand(i,0b11111_00000_11111)];//pull the -z faces from the section
+                this.neighboringFaces[i+32*32*5] = raw[expandBits(i,0b11111_00000_11111)];//pull the -z faces from the section
             }
             sec.release(WorldSection.RELEASE_HINT_POSSIBLE_REUSE);
         }
+    }
+
+    // Java 17-compatible equivalent of Integer.expand (Java 19+).
+    // Deposits consecutive low bits of value into the set-bit positions of mask.
+    private static int expandBits(int value, int mask) {
+        int result = 0;
+        for (int sourceBit = 1; mask != 0; sourceBit <<= 1) {
+            int targetBit = mask & -mask;
+            if ((value & sourceBit) != 0) result |= targetBit;
+            mask &= mask - 1;
+        }
+        return result;
     }
 
     private static final long LM = (0xFFL<<55);
