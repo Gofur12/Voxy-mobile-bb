@@ -101,41 +101,90 @@ public class SharedIndexBuffer {
     public SharedIndexBuffer() {
         this.contextGeneration = GlBackendRuntime.getContextGeneration();
         this.indexBuffer = new GlBuffer((1<<16)*6*2 + 6*2*3);
-        var quadIndexBuff = generateQuadIndicesShort(16380);
-        var cubeBuff = generateCubeIndexBuffer();
+        MemoryBuffer quadIndexBuff = null;
+        MemoryBuffer cubeBuff = null;
+        try {
+            quadIndexBuff = generateQuadIndicesShort(16380);
+            cubeBuff = generateCubeIndexBuffer();
 
-        long ptr = UploadStream.INSTANCE.upload(this.indexBuffer, 0, this.indexBuffer.size());
-        quadIndexBuff.cpyTo(ptr);
-        cubeBuff.cpyTo((1<<16)*2*6 + ptr);
-
+            long ptr = UploadStream.INSTANCE.upload(this.indexBuffer, 0, this.indexBuffer.size());
+            quadIndexBuff.cpyTo(ptr);
+            cubeBuff.cpyTo((1<<16)*2*6 + ptr);
+            UploadStream.INSTANCE.commit();
+        } catch (RuntimeException | Error failure) {
+            cleanupConstructionFailure(quadIndexBuff, cubeBuff, failure);
+            try {
+                this.indexBuffer.free();
+            } catch (RuntimeException | Error cleanupFailure) {
+                if (cleanupFailure != failure) failure.addSuppressed(cleanupFailure);
+            }
+            throw failure;
+        }
         quadIndexBuff.free();
         cubeBuff.free();
-        UploadStream.INSTANCE.commit();
     }
 
     private SharedIndexBuffer(boolean type2) {
         this.contextGeneration = GlBackendRuntime.getContextGeneration();
         this.indexBuffer = new GlBuffer((1<<8)*6 + 6*2*3);
-        var quadIndexBuff = generateQuadIndicesByte(63);
-        var cubeBuff = generateCubeIndexBuffer();
+        MemoryBuffer quadIndexBuff = null;
+        MemoryBuffer cubeBuff = null;
+        try {
+            quadIndexBuff = generateQuadIndicesByte(63);
+            cubeBuff = generateCubeIndexBuffer();
 
-        long ptr = UploadStream.INSTANCE.upload(this.indexBuffer, 0, this.indexBuffer.size());
-        quadIndexBuff.cpyTo(ptr);
-        cubeBuff.cpyTo((1<<8)*6 + ptr);
-
+            long ptr = UploadStream.INSTANCE.upload(this.indexBuffer, 0, this.indexBuffer.size());
+            quadIndexBuff.cpyTo(ptr);
+            cubeBuff.cpyTo((1<<8)*6 + ptr);
+            UploadStream.INSTANCE.commit();
+        } catch (RuntimeException | Error failure) {
+            cleanupConstructionFailure(quadIndexBuff, cubeBuff, failure);
+            try {
+                this.indexBuffer.free();
+            } catch (RuntimeException | Error cleanupFailure) {
+                if (cleanupFailure != failure) failure.addSuppressed(cleanupFailure);
+            }
+            throw failure;
+        }
         quadIndexBuff.free();
         cubeBuff.free();
-        UploadStream.INSTANCE.commit();
     }
 
     private SharedIndexBuffer(boolean type2, boolean type3) {
         this.contextGeneration = GlBackendRuntime.getContextGeneration();
         this.indexBuffer = new GlBuffer(6*2*3*(256/8));
-        var cubeBuff = generateByteCubesIndexBuffer(256/8);
-
-        cubeBuff.cpyTo(UploadStream.INSTANCE.upload(this.indexBuffer, 0, this.indexBuffer.size()));
-        UploadStream.INSTANCE.commit();
+        MemoryBuffer cubeBuff = null;
+        try {
+            cubeBuff = generateByteCubesIndexBuffer(256/8);
+            cubeBuff.cpyTo(UploadStream.INSTANCE.upload(this.indexBuffer, 0, this.indexBuffer.size()));
+            UploadStream.INSTANCE.commit();
+        } catch (RuntimeException | Error failure) {
+            cleanupConstructionFailure(cubeBuff, null, failure);
+            try {
+                this.indexBuffer.free();
+            } catch (RuntimeException | Error cleanupFailure) {
+                if (cleanupFailure != failure) failure.addSuppressed(cleanupFailure);
+            }
+            throw failure;
+        }
         cubeBuff.free();
+    }
+
+    private static void cleanupConstructionFailure(MemoryBuffer first, MemoryBuffer second, Throwable failure) {
+        if (first != null) {
+            try {
+                first.free();
+            } catch (RuntimeException | Error cleanupFailure) {
+                if (cleanupFailure != failure) failure.addSuppressed(cleanupFailure);
+            }
+        }
+        if (second != null && second != first) {
+            try {
+                second.free();
+            } catch (RuntimeException | Error cleanupFailure) {
+                if (cleanupFailure != failure) failure.addSuppressed(cleanupFailure);
+            }
+        }
     }
 
     private static MemoryBuffer generateCubeIndexBuffer() {
