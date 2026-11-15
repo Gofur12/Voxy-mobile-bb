@@ -3,6 +3,7 @@ package me.cortex.voxy.client;
 import me.cortex.voxy.client.core.gl.Capabilities;
 import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
 import me.cortex.voxy.client.core.gl.backend.desktop.DesktopGlBackendProvider;
+import me.cortex.voxy.client.core.rendering.util.DownloadStream;
 import me.cortex.voxy.client.core.rendering.util.SharedIndexBuffer;
 import me.cortex.voxy.client.core.rendering.util.UploadStream;
 import me.cortex.voxy.common.Logger;
@@ -61,6 +62,7 @@ public class VoxyClient implements ClientModInitializer {
         if (systemSupported) {
 
             UploadStream.initialize();
+            DownloadStream.initialize();
             SharedIndexBuffer.initialize();
 
             VoxyCommon.setInstanceFactory(VoxyClientInstance::new);
@@ -91,6 +93,14 @@ public class VoxyClient implements ClientModInitializer {
             if (shutdownFailure != null) shutdownFailure.addSuppressed(failure);
             else shutdownFailure = failure;
             Logger.error("Failed to release shared index buffers", failure);
+        }
+
+        try {
+            DownloadStream.shutdown();
+        } catch (RuntimeException failure) {
+            if (shutdownFailure != null) shutdownFailure.addSuppressed(failure);
+            else shutdownFailure = failure;
+            Logger.error("Failed to shut down download stream", failure);
         }
 
         try {
