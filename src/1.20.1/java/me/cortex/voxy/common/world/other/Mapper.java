@@ -424,15 +424,16 @@ public class Mapper {
                 }
                 var state = BlockState.CODEC.parse(NbtOps.INSTANCE, bsc);
 
-                if (state.isError() && !state.hasResultOrPartial()) {
-                    Logger.error("Could not decode blockstate, setting to air. id:" + id + " error: " + state.error().map(Object::toString) + " tag:"+bsc);
+                var decodedState = state.resultOrPartial(message ->
+                        Logger.error("Could not fully decode blockstate id:" + id + " error: " + message + " tag:" + bsc));
+                if (decodedState.isEmpty()) {
+                    Logger.error("Could not decode blockstate, setting to air. id:" + id + " tag:" + bsc);
                     return new StateEntry(id, Blocks.AIR.defaultBlockState());
                 }
-                if (state.isError() && state.hasResultOrPartial()) {
-                    Logger.error("Decode result only had a partial value, using it anyway. id:" + id + " tag:"+bsc + " error: " + state.error().map(Object::toString));
-                    forceResave[0] |= true;
+                if (state.error().isPresent()) {
+                    forceResave[0] = true;
                 }
-                return new StateEntry(id, state.getPartialOrThrow());
+                return new StateEntry(id, decodedState.get());
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -464,7 +465,7 @@ public class Mapper {
         public static BiomeEntry deserialize(int id, byte[] data) {
             try {
                 var compound = readCompressed(data);
-                if (compound.getIntOr("id", -1) != id) {
+                if (compound.getInt("id") != id) {
                     throw new IllegalStateException("Encoded id != expected id");
                 }
                 String biome = compound.getString("biome_id");
