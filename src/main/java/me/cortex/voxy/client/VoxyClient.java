@@ -111,6 +111,14 @@ public class VoxyClient implements ClientModInitializer {
             Logger.error("Failed to shut down upload stream", failure);
         }
 
+        try {
+            me.cortex.voxy.client.core.rendering.util.LightMapHelper.shutdown();
+        } catch (RuntimeException failure) {
+            if (shutdownFailure != null) shutdownFailure.addSuppressed(failure);
+            else shutdownFailure = failure;
+            Logger.error("Failed to release lightmap sampler", failure);
+        }
+
         Capabilities.clear();
 
         if (GlBackendRuntime.isInitialized()) {
