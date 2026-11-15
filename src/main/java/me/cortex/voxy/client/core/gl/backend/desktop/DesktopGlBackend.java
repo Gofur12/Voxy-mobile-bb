@@ -2,6 +2,7 @@ package me.cortex.voxy.client.core.gl.backend.desktop;
 
 import me.cortex.voxy.client.core.gl.backend.GlBackend;
 import me.cortex.voxy.client.core.gl.backend.GlCapabilities;
+import me.cortex.voxy.client.core.gl.backend.GlFramebufferClearState;
 import me.cortex.voxy.client.core.gl.backend.GlTextureClearType;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11C;
@@ -12,6 +13,10 @@ import org.lwjgl.opengl.GL32C;
 import org.lwjgl.opengl.GL33C;
 import org.lwjgl.opengl.GL42C;
 import org.lwjgl.opengl.GL45C;
+import org.lwjgl.system.MemoryStack;
+
+import java.nio.ByteBuffer;
+import java.nio.IntBuffer;
 
 /**
  * Desktop OpenGL 4.5 implementation of the backend contract.
@@ -292,6 +297,99 @@ public final class DesktopGlBackend implements GlBackend {
     @Override
     public boolean supportsTextureClear(GlTextureClearType clearType) {
         return clearType != null;
+    }
+
+    /**
+     * Captures the framebuffer-related state touched by a temporary-FBO clear.
+     * The Minecraft-owned OpenGL context must be current on this thread.
+     */
+    @Override
+    public GlFramebufferClearState captureFramebufferClearState() {
+        int drawFramebuffer = GL11C.glGetInteger(GL30C.GL_DRAW_FRAMEBUFFER_BINDING);
+        int readFramebuffer = GL11C.glGetInteger(GL30C.GL_READ_FRAMEBUFFER_BINDING);
+        int maxDrawBuffers = GL11C.glGetInteger(GL20C.GL_MAX_DRAW_BUFFERS);
+        if (maxDrawBuffers <= 0) {
+            throw new IllegalStateException("OpenGL reported no available draw buffers");
+        }
+
+        int[] drawBuffers = new int[drawFramebuffer == 0 ? 1 : maxDrawBuffers];
+        for (int i = 0; i < drawBuffers.length; i++) {
+            drawBuffers[i] = GL11C.glGetInteger(GL20C.GL_DRAW_BUFFER0 + i);
+        }
+        int readBuffer = GL11C.glGetInteger(GL11C.GL_READ_BUFFER);
+        boolean scissorEnabled = GL11C.glIsEnabled(GL11C.GL_SCISSOR_TEST);
+
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            IntBuffer scissorBox = stack.mallocInt(4);
+            GL11C.glGetIntegerv(GL11C.GL_SCISSOR_BOX, scissorBox);
+
+            ByteBuffer colorMask = stack.malloc(4);
+            GL11C.glGetBooleanv(GL11C.GL_COLOR_WRITEMASK, colorMask);
+            ByteBuffer depthMask = stack.malloc(1);
+            GL11C.glGetBooleanv(GL11C.GL_DEPTH_WRITEMASK, depthMask);
+
+            return new GlFramebufferClearState(
+                    drawFramebuffer,
+                    readFramebuffer,
+                    drawBuffers,
+                    readBuffer,
+                    scissorEnabled,
+                    scissorBox.get(0),
+                    scissorBox.get(1),
+                    scissorBox.get(2),
+                    scissorBox.get(3),
+                    colorMask.get(0) != 0,
+                    colorMask.get(1) != 0,
+                    colorMask.get(2) != 0,
+                    colorMask.get(3) != 0,
+                    depthMask.get(0) != 0,
+                    GL11C.glGetInteger(GL11C.GL_STENCIL_WRITEMASK),
+                    GL11C.glGetInteger(GL20C.GL_STENCIL_BACK_WRITEMASK)
+            );
+        }
+    }
+
+    /**
+     * Restores the captured framebuffer-related state. Framebuffer-specific
+     * draw/read selections are restored only after their original FBOs are bound.
+     */
+    @Override
+    public void restoreFramebufferClearState(GlFramebufferClearState state) {
+        if (state == null) {
+            throw new IllegalArgumentException("Framebuffer clear state must not be null");
+        }
+
+        // Restore the original draw target before restoring its per-FBO draw
+        // buffer selection. The default framebuffer accepts one draw selection.
+        GL30C.glBindFramebuffer(GL30C.GL_DRAW_FRAMEBUFFER, state.drawFramebuffer());
+        int[] drawBuffers = state.drawBuffers();
+        if (state.drawFramebuffer() == 0) {
+            GL11C.glDrawBuffer(drawBuffers[0]);
+        } else {
+            try (MemoryStack stack = MemoryStack.stackPush()) {
+                IntBuffer selections = stack.mallocInt(drawBuffers.length);
+                selections.put(drawBuffers).flip();
+                GL20C.glDrawBuffers(selections);
+            }
+        }
+
+        // Read-buffer selection is also framebuffer state, so restore it while
+        // the original read framebuffer is bound.
+        GL30C.glBindFramebuffer(GL30C.GL_READ_FRAMEBUFFER, state.readFramebuffer());
+        GL11C.glReadBuffer(state.readBuffer());
+
+        if (state.scissorEnabled()) {
+            GL11C.glEnable(GL11C.GL_SCISSOR_TEST);
+        } else {
+            GL11C.glDisable(GL11C.GL_SCISSOR_TEST);
+        }
+        GL11C.glScissor(state.scissorX(), state.scissorY(),
+                state.scissorWidth(), state.scissorHeight());
+        GL11C.glColorMask(state.colorMaskRed(), state.colorMaskGreen(),
+                state.colorMaskBlue(), state.colorMaskAlpha());
+        GL11C.glDepthMask(state.depthMask());
+        GL20C.glStencilMaskSeparate(GL11C.GL_FRONT, state.stencilFrontWriteMask());
+        GL20C.glStencilMaskSeparate(GL11C.GL_BACK, state.stencilBackWriteMask());
     }
 
     @Override
