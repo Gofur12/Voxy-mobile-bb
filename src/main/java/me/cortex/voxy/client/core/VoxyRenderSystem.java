@@ -1,7 +1,5 @@
 package me.cortex.voxy.client.core;
 
-import com.mojang.renderpearl.backend.opengl.GlConst;
-import com.mojang.renderpearl.backend.opengl.GlStateManager;
 import me.cortex.voxy.client.TimingStatistics;
 import me.cortex.voxy.client.VoxyClient;
 import me.cortex.voxy.client.config.VoxyConfig;
@@ -35,7 +33,6 @@ import me.cortex.voxy.common.thread.ServiceManager;
 import me.cortex.voxy.common.util.GlobalCleaner;
 import me.cortex.voxy.common.world.WorldEngine;
 import me.cortex.voxy.commonImpl.VoxyCommon;
-import net.caffeinemc.mods.sodium.client.util.FogParameters;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
@@ -50,6 +47,9 @@ import java.util.List;
 import static org.lwjgl.opengl.ARBDirectStateAccess.glGetTextureLevelParameteri;
 import static org.lwjgl.opengl.GL11.glGetIntegerv;
 import static org.lwjgl.opengl.GL11C.*;
+import static org.lwjgl.opengl.GL13C.GL_TEXTURE0;
+import static org.lwjgl.opengl.GL13C.GL_TEXTURE1;
+import static org.lwjgl.opengl.GL13C.glActiveTexture;
 import static org.lwjgl.opengl.GL30C.*;
 import static org.lwjgl.opengl.GL33.glBindSampler;
 import static org.lwjgl.opengl.GL43.GL_SHADER_STORAGE_BUFFER;
@@ -219,14 +219,14 @@ public class VoxyRenderSystem {
         }
 
         for (int i = 0; i < 12; i++) {
-            GlStateManager._activeTexture(GlConst.GL_TEXTURE0+i);
-            GlStateManager._bindTexture(0);
+            glActiveTexture(GL_TEXTURE0+i);
+            glBindTexture(GL_TEXTURE_2D, 0);
             glBindSampler(i, 0);
         }
     }
 
 
-    public Viewport<?> setupViewport(Matrix4fc vanillaProjection, Matrix4fc modelView, FogParameters fogParameters, int width, int height, double cameraX, double cameraY, double cameraZ) {
+    public Viewport<?> setupViewport(Matrix4fc vanillaProjection, Matrix4fc modelView, Object fogParameters, int width, int height, double cameraX, double cameraY, double cameraZ) {
         var viewport = this.getViewport();
         if (viewport == null) {
             return null;
@@ -316,10 +316,10 @@ public class VoxyRenderSystem {
             oldBufferBindings[i] = glGetIntegeri(GL_SHADER_STORAGE_BUFFER_BINDING, i);
         }
 
-        GlStateManager._enableDepthTest();
-        GlStateManager._depthFunc(this.properties.closerEqualDepthCompare());
-        GlStateManager._depthMask(true);
-        GlStateManager._disablePolygonOffset();
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(this.properties.closerEqualDepthCompare());
+        glDepthMask(true);
+        glDisable(GL_POLYGON_OFFSET_FILL);
 
         int oldFB = GL11.glGetInteger(GL_DRAW_FRAMEBUFFER_BINDING);
 
@@ -387,23 +387,23 @@ public class VoxyRenderSystem {
 
         GPUTiming.INSTANCE.tick();
 
-        glBindFramebuffer(GlConst.GL_FRAMEBUFFER, oldFB);
+        glBindFramebuffer(GL_FRAMEBUFFER, oldFB);
         glViewport(dims[0], dims[1], dims[2], dims[3]);
 
         {//Reset state manager stuffs
-            GlStateManager._glUseProgram(0);
             glUseProgram(0);
-            GlStateManager._enableDepthTest();
+            glUseProgram(0);
+            glEnable(GL_DEPTH_TEST);
             glEnable(GL_DEPTH_TEST);
             glDisable(GL_STENCIL_TEST);
 
-            GlStateManager._glBindVertexArray(0);//Clear binding
+            glBindVertexArray(0);//Clear binding
             glBindVertexArray(0);
 
-            GlStateManager._activeTexture(GlConst.GL_TEXTURE1);
+            glActiveTexture(GL_TEXTURE1);
             for (int i = 0; i < 12; i++) {
-                GlStateManager._activeTexture(GlConst.GL_TEXTURE0+i);
-                GlStateManager._bindTexture(0);
+                glActiveTexture(GL_TEXTURE0+i);
+                glBindTexture(GL_TEXTURE_2D, 0);
                 glBindSampler(i, 0);
             }
 
@@ -414,13 +414,13 @@ public class VoxyRenderSystem {
             for (int i = 0; i < oldBufferBindings.length; i++) {
                 glBindBufferBase(GL_SHADER_STORAGE_BUFFER, i, oldBufferBindings[i]);
             }
-            GlStateManager._blendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
+            glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
             glBlendEquation(GL_FUNC_ADD);
-            GlStateManager._blendFuncSeparate(0,0, 0, 0);
+            glBlendFuncSeparate(0,0, 0, 0);
             glBlendFunc(0, 0);
-            GlStateManager._disableBlend(0);
             glDisable(GL_BLEND);
-            GlStateManager._depthFunc(GL_LESS);
+            glDisable(GL_BLEND);
+            glDepthFunc(GL_LESS);
             glDepthFunc(GL_LESS);
 
             //((SodiumShader) Iris.getPipelineManager().getPipelineNullable().getSodiumPrograms().getProgram(DefaultTerrainRenderPasses.CUTOUT).getInterface()).setupState(DefaultTerrainRenderPasses.CUTOUT, fogParameters);
