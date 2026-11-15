@@ -289,8 +289,44 @@ public final class DesktopGlBackend implements GlBackend {
     }
 
     @Override
-    public void clearTextureImage(int handle, int level, int format, int type, long dataAddress) {
-        GL45C.nglClearTexImage(handle, level, format, type, dataAddress);
+    public void clearTextureImage(int handle, int level, GlTextureClearType clearType) {
+        if (clearType == null) {
+            throw new IllegalArgumentException("Texture clear type must not be null");
+        }
+        int format;
+        int type;
+        switch (clearType) {
+            case RED_FLOAT -> {
+                format = GL11C.GL_RED;
+                type = GL11C.GL_FLOAT;
+            }
+            case RG_FLOAT -> {
+                format = GL30C.GL_RG;
+                type = GL11C.GL_FLOAT;
+            }
+            case RGBA_FLOAT -> {
+                format = GL11C.GL_RGBA;
+                type = GL11C.GL_FLOAT;
+            }
+            case RED_UNSIGNED_INT -> {
+                format = GL30C.GL_RED_INTEGER;
+                type = GL11C.GL_UNSIGNED_INT;
+            }
+            case DEPTH_FLOAT -> {
+                format = GL11C.GL_DEPTH_COMPONENT;
+                type = GL11C.GL_FLOAT;
+            }
+            case DEPTH_STENCIL_UNSIGNED_INT_24_8 -> {
+                format = GL30C.GL_DEPTH_STENCIL;
+                type = GL30C.GL_UNSIGNED_INT_24_8;
+            }
+            case DEPTH_STENCIL_FLOAT32_UNSIGNED_INT_24_8 -> {
+                format = GL30C.GL_DEPTH_STENCIL;
+                type = GL32C.GL_FLOAT_32_UNSIGNED_INT_24_8_REV;
+            }
+            default -> throw new IllegalArgumentException("Unsupported texture clear type: " + clearType);
+        }
+        GL45C.nglClearTexImage(handle, level, format, type, 0L);
     }
 
     @Override
