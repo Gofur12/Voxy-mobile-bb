@@ -85,6 +85,7 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
         this.depthStencilSetup = new FullscreenBlit(properties, "voxy:post/fullscreen2.vert", "voxy:post/setup_stencil_depth.frag");
         this.depthSampler = org.lwjgl.opengl.GL33C.glGenSamplers();
         if (this.depthSampler == 0) {
+            this.depthStencilSetup.delete();
             throw new IllegalStateException("Unable to create depth sampler");
         }
         try {
@@ -93,6 +94,11 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
         } catch (RuntimeException | Error failure) {
             try {
                 org.lwjgl.opengl.GL33C.glDeleteSamplers(this.depthSampler);
+            } catch (RuntimeException | Error cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+            }
+            try {
+                this.depthStencilSetup.delete();
             } catch (RuntimeException | Error cleanupFailure) {
                 failure.addSuppressed(cleanupFailure);
             }
