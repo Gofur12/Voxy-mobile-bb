@@ -12,6 +12,17 @@ public enum GlRendererPath {
     GLES_BASIC_RASTER_CANDIDATE,
     UNSUPPORTED;
 
+    /** True only when this repository contains a usable renderer implementation. */
+    public boolean isImplemented() {
+        return this == DESKTOP_MDIC;
+    }
+
+    /** Selects a tier only when its renderer implementation is present. */
+    public static GlRendererPath selectImplemented(GlCapabilities capabilities) {
+        GlRendererPath candidate = select(capabilities);
+        return candidate.isImplemented() ? candidate : UNSUPPORTED;
+    }
+
     public static GlRendererPath select(GlCapabilities capabilities) {
         if (capabilities == null) {
             throw new IllegalArgumentException("GL capabilities must not be null");
