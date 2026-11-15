@@ -43,13 +43,13 @@ public class GlVertexArray extends TrackedObject {
             throw new IllegalStateException("Vertex stride must be set to a positive value before binding a vertex buffer");
         }
         for (int index : this.indices) {
-            GlBackendRuntime.requireBackend().bindVertexArrayVertexBuffer(this.id, index, buffer, 0, this.stride);
+            GlBackendRuntime.requireBackend(this.contextGeneration, "GlVertexArray").bindVertexArrayVertexBuffer(this.id, index, buffer, 0, this.stride);
         }
         return this;
     }
 
     public GlVertexArray bindElementBuffer(int buffer) {
-        GlBackendRuntime.requireBackend().bindVertexArrayElementBuffer(this.id, buffer);
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlVertexArray").bindVertexArrayElementBuffer(this.id, buffer);
         return this;
     }
 
@@ -63,8 +63,8 @@ public class GlVertexArray extends TrackedObject {
 
     public GlVertexArray setI(int index, int type, int count, int offset) {
         validateAttribute(index, count, offset);
-        GlBackendRuntime.requireBackend().enableVertexArrayAttribute(this.id, index);
-        GlBackendRuntime.requireBackend().setVertexArrayIntegerAttributeFormat(this.id, index, count, type, offset);
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlVertexArray").enableVertexArrayAttribute(this.id, index);
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlVertexArray").setVertexArrayIntegerAttributeFormat(this.id, index, count, type, offset);
         this.addIndex(index);
         return this;
     }
@@ -75,8 +75,8 @@ public class GlVertexArray extends TrackedObject {
 
     public GlVertexArray setF(int index, int type, int count, boolean normalize, int offset) {
         validateAttribute(index, count, offset);
-        GlBackendRuntime.requireBackend().enableVertexArrayAttribute(this.id, index);
-        GlBackendRuntime.requireBackend().setVertexArrayFloatAttributeFormat(this.id, index, count, type, normalize, offset);
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlVertexArray").enableVertexArrayAttribute(this.id, index);
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlVertexArray").setVertexArrayFloatAttributeFormat(this.id, index, count, type, normalize, offset);
         this.addIndex(index);
         return this;
     }
