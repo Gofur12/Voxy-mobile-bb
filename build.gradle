@@ -1,11 +1,16 @@
 plugins {
-    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+    // Loom 1.14+ separates remapping (<= 1.21.11) from non-remapping (26.1+).
+    // Resolve both plugin markers, then apply only the one matching voxyTarget below.
+    id 'net.fabricmc.fabric-loom' version "${loom_version}" apply false
+    id 'net.fabricmc.fabric-loom-remap' version "${loom_version}" apply false
     id 'maven-publish'
     id "me.champeau.jmh" version "0.7.3"
 }
 
 // Select an isolated Minecraft target without changing the repository defaults.
 def voxyTarget = providers.gradleProperty("voxyTarget").getOrElse("26.3")
+apply plugin: (voxyTarget == "1.20.1" ? "net.fabricmc.fabric-loom-remap" : "net.fabricmc.fabric-loom")
+
 def voxyProfile = [:]
 switch (voxyTarget) {
     case "26.3":
@@ -259,7 +264,10 @@ def smartDependency = { String property, boolean runtime = false, String maven =
 dependencies {
     // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${voxyProperty("minecraft_version")}"
-    //mappings loom.officialMojangMappings()
+    if (voxyTarget == "1.20.1") {
+        // The legacy target uses obfuscated Minecraft and needs an explicit mapping namespace.
+        mappings loom.officialMojangMappings()
+    }
     implementation "net.fabricmc:fabric-loader:${voxyProperty("loader_version")}"
 
 
