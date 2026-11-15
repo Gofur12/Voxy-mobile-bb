@@ -249,7 +249,10 @@ def smartDependency = { String property, boolean runtime = false, String maven =
         dep = (maven!=null?(maven+":"):"")+ver;
     }
     dependencies {
-        if (compile && runtime) {
+        if (voxyTarget == "1.20.1" && compile) {
+            // Loom's remapping plugin needs mod-aware configurations for mod dependencies.
+            modImplementation(dep)
+        } else if (compile && runtime) {
             implementation(dep)
         } else {
             if (compile) {
@@ -271,7 +274,11 @@ dependencies {
         // Keep those names for compilation; the target-specific access widener is isolated.
         mappings loom.officialMojangMappings()
     }
-    implementation "net.fabricmc:fabric-loader:${voxyProperty("loader_version")}"
+    if (voxyTarget == "1.20.1") {
+        modImplementation "net.fabricmc:fabric-loader:${voxyProperty("loader_version")}"
+    } else {
+        implementation "net.fabricmc:fabric-loader:${voxyProperty("loader_version")}"
+    }
 
 
     runtimeOnlyMsk(fabricApi.module("fabric-api-base", voxyProperty("fabric_api_version")))
@@ -290,9 +297,17 @@ dependencies {
     {
         var (_, mr, ver, _2) = findSodiumVersion()
         if (mr) {
-            implementation "maven.modrinth:sodium:${ver}"
+            if (voxyTarget == "1.20.1") {
+                modImplementation "maven.modrinth:sodium:${ver}"
+            } else {
+                implementation "maven.modrinth:sodium:${ver}"
+            }
         } else {
-            implementation "net.caffeinemc:sodium-fabric:${ver}"
+            if (voxyTarget == "1.20.1") {
+                modImplementation "net.caffeinemc:sodium-fabric:${ver}"
+            } else {
+                implementation "net.caffeinemc:sodium-fabric:${ver}"
+            }
         }
     }
 
