@@ -15,9 +15,9 @@ import java.util.regex.Pattern;
 
 public class ShaderLoader {
     public static String parse(String id) {
-        var src =  "#version 460 core\n";
-        src += String.join("\n", ShaderLoadingParser.parseRoot(Identifier.parse(id)));
-        return src;
+        Identifier identifier = Identifier.parse(id);
+        String version = ShaderLoadingParser.parseRootVersion(identifier);
+        return version + "\n" + String.join("\n", ShaderLoadingParser.parseRoot(identifier));
     }
 
 
@@ -25,6 +25,15 @@ public class ShaderLoader {
 
     private static final class ShaderLoadingParser {
         private static final Pattern IMPORT_PATTERN = Pattern.compile("#import <(?<namespace>.*):(?<path>.*)>");
+        public static String parseRootVersion(Identifier id) {
+            for (String line : toLines(loadShaderAsset(id))) {
+                if (line.startsWith("#version")) {
+                    return line;
+                }
+            }
+            return "#version 460 core";
+        }
+
         public static List<String> parseRoot(Identifier id) {
             List<String> out = new ArrayList<>();
             for (var line : toLines(loadShaderAsset(id))) {
