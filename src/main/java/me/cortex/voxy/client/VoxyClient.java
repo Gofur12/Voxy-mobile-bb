@@ -3,6 +3,7 @@ package me.cortex.voxy.client;
 import me.cortex.voxy.client.core.gl.Capabilities;
 import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
 import me.cortex.voxy.client.core.gl.backend.GlBackendProviders;
+import me.cortex.voxy.client.core.gl.backend.GlRendererPath;
 import me.cortex.voxy.client.core.rendering.util.DownloadStream;
 import me.cortex.voxy.client.core.rendering.util.SharedIndexBuffer;
 import me.cortex.voxy.client.core.rendering.util.UploadStream;
@@ -28,6 +29,16 @@ public class VoxyClient implements ClientModInitializer {
         // Called after RenderSystem.initRenderer returns; the game context is current here.
         if (!GlBackendRuntime.initialize(GlBackendProviders.discover())) {
             Logger.error("Voxy is unsupported: no compatible GPU backend is available.");
+            return;
+        }
+
+        // Do not enter legacy Voxy initialization for a GLES context merely
+        // because its API version is high enough. Only the desktop MDIC renderer
+        // is implemented in this source tree at present.
+        GlRendererPath rendererPath = GlRendererPath.selectImplemented(
+                GlBackendRuntime.requireBackend().capabilities());
+        if (rendererPath == GlRendererPath.UNSUPPORTED) {
+            Logger.error("Voxy is unsupported: this graphics backend has no implemented renderer path.");
             return;
         }
 
