@@ -291,6 +291,9 @@ public final class DesktopGlBackend implements GlBackend {
 
     @Override
     public void clearTextureImage(int handle, int level, GlTextureClearType clearType) {
+        if (handle <= 0 || level < 0) {
+            throw new IllegalArgumentException("Texture handle must be positive and mip level must be non-negative");
+        }
         if (clearType == null) {
             throw new IllegalArgumentException("Texture clear type must not be null");
         }
