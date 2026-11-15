@@ -206,7 +206,9 @@ jar {
 }
 
 loom {
-    accessWidenerPath = file("src/main/resources/voxy.accesswidener")
+    // The main access widener is authored in Mojang's official namespace for 26.3.
+    // Keep the legacy Yarn target on its own named-namespace access widener.
+    accessWidenerPath = file(voxyTarget == "1.20.1" ? "src/main/resources/voxy-1.20.1.accesswidener" : "src/main/resources/voxy.accesswidener")
 }
 
 def runtimeOnlyMsk = {arg->}
