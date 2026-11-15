@@ -74,7 +74,7 @@ public class MDICSectionRenderer extends AbstractSectionRenderer<MDICViewport, B
 
     private final Shader prefixSumShader = Shader.make()
             //Use subgroup prefix sum if possible otherwise use dodgy... slow prefix sum
-            .add(ShaderType.COMPUTE, Capabilities.INSTANCE.subgroup?"voxy:util/prefixsum/inital3.comp":"voxy:util/prefixsum/simple.comp")
+            .add(ShaderType.COMPUTE, Capabilities.require().subgroup?"voxy:util/prefixsum/inital3.comp":"voxy:util/prefixsum/simple.comp")
             .define("IO_BUFFER", 0)
             .compile();
 
@@ -110,9 +110,9 @@ public class MDICSectionRenderer extends AbstractSectionRenderer<MDICViewport, B
                 .defineIf("TAA_PATCH", taa != null)
                 .defineIf("DEBUG_RENDER", false)
 
-                //.defineIf("USE_NV_JANK", Capabilities.INSTANCE.isNvidia)//TODO: fix use capability to try compile the jank thing to see if it can be and use that
+                //.defineIf("USE_NV_JANK", Capabilities.require().isNvidia)//TODO: fix use capability to try compile the jank thing to see if it can be and use that
 
-                //.defineIf("USE_NV_BARRY", Capabilities.INSTANCE.nvBarryCoords)
+                //.defineIf("USE_NV_BARRY", Capabilities.require().nvBarryCoords)
 
                 .addSource(ShaderType.VERTEX, vertex);
 
@@ -276,7 +276,7 @@ public class MDICSectionRenderer extends AbstractSectionRenderer<MDICViewport, B
         {//Test occlusion
             this.cullShader.bind();
             if (this.pipeline.hasTAA()) this.pipeline.bindUniforms();//Used for shader TAA
-            if (Capabilities.INSTANCE.repFragTest) {
+            if (Capabilities.require().repFragTest) {
                 glEnable(GL_REPRESENTATIVE_FRAGMENT_TEST_NV);
             }
             glBindVertexArray(GlVertexArray.STATIC_VAO);
@@ -295,7 +295,7 @@ public class MDICSectionRenderer extends AbstractSectionRenderer<MDICViewport, B
             glDepthMask(true);
             glColorMask(true, true, true, true);
             glDisable(GL_DEPTH_TEST);
-            if (Capabilities.INSTANCE.repFragTest) {
+            if (Capabilities.require().repFragTest) {
                 glDisable(GL_REPRESENTATIVE_FRAGMENT_TEST_NV);
             }
         }
