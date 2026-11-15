@@ -32,7 +32,7 @@
   },
   "mixins": [
     {
-      "config": "client.voxy.mixins.json",
+      "config": "${client_mixin_config}",
       "environment": "client"
     },
     "common.voxy.mixins.json"
