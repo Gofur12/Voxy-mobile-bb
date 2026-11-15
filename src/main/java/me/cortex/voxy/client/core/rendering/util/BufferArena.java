@@ -73,6 +73,6 @@ public class BufferArena {
     public void downloadRemove(long allocation, Consumer<MemoryBuffer> consumer) {
         int size = this.allocationMap.free(allocation);
         this.used -= size;
-        DownloadStream.INSTANCE.download(this.buffer, allocation*this.elementSize, (long) size *this.elementSize, consumer);
+        DownloadStream.requireInstance().download(this.buffer, allocation*this.elementSize, (long) size *this.elementSize, consumer);
     }
 }
