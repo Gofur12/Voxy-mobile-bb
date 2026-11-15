@@ -9,7 +9,8 @@ public class GlFramebuffer extends TrackedObject {
     public final int id;
     private final long contextGeneration;
     public GlFramebuffer() {
-        this.id = GlBackendRuntime.requireBackend(this.contextGeneration, "GlFramebuffer").createFramebuffer();
+        var backend = GlBackendRuntime.requireBackend();
+        this.id = backend.createFramebuffer();
         this.contextGeneration = GlBackendRuntime.getContextGeneration();
     }
 
@@ -22,33 +23,37 @@ public class GlFramebuffer extends TrackedObject {
     }
 
     public GlFramebuffer bind(int attachment, int texture, int lvl) {
-        GlBackendRuntime.requireBackend().attachTexture2D(this.id, attachment, texture, lvl);
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlFramebuffer").attachTexture2D(this.id, attachment, texture, lvl);
         return this;
     }
 
     public GlFramebuffer bind(int attachment, GlTexture texture, int lvl) {
-        GlBackendRuntime.requireBackend().attachTexture2D(this.id, attachment, texture.id, lvl);
+        texture.assertContextCurrent();
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlFramebuffer").attachTexture2D(this.id, attachment, texture.id, lvl);
         return this;
     }
 
     public GlFramebuffer bind(int attachment, GlRenderBuffer buffer) {
-        GlBackendRuntime.requireBackend().attachRenderbuffer(this.id, attachment, buffer.id);
+        buffer.assertContextCurrent();
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlFramebuffer").attachRenderbuffer(this.id, attachment, buffer.id);
         return this;
     }
 
     public GlFramebuffer setDrawBuffers(int... buffers) {
-        GlBackendRuntime.requireBackend().setFramebufferDrawBuffers(this.id, buffers);
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlFramebuffer").setFramebufferDrawBuffers(this.id, buffers);
         return this;
     }
 
     @Override
     public void free() {
         super.free0();
-        GlBackendRuntime.requireBackend().deleteFramebuffer(this.id);
+        if (GlBackendRuntime.isContextGenerationCurrent(this.contextGeneration)) {
+            GlBackendRuntime.requireBackend(this.contextGeneration, "GlFramebuffer").deleteFramebuffer(this.id);
+        }
     }
 
     public GlFramebuffer verify() {
-        int code = GlBackendRuntime.requireBackend().getFramebufferStatus(this.id);
+        int code = GlBackendRuntime.requireBackend(this.contextGeneration, "GlFramebuffer").getFramebufferStatus(this.id);
         if (code != GL_FRAMEBUFFER_COMPLETE) {
             throw new IllegalStateException("Framebuffer incomplete with error code: " + code);
         }
