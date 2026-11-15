@@ -265,8 +265,9 @@ dependencies {
     // To change the versions see the gradle.properties file
     minecraft "com.mojang:minecraft:${voxyProperty("minecraft_version")}"
     if (voxyTarget == "1.20.1") {
-        // The legacy target uses obfuscated Minecraft and needs an explicit mapping namespace.
-        mappings loom.officialMojangMappings()
+        // Loom's remapping pipeline and Fabric API access wideners use the named namespace.
+        // Use Yarn mappings so intermediary dependency metadata is remapped consistently.
+        mappings "net.fabricmc:yarn:1.20.1+build.10:v2"
     }
     implementation "net.fabricmc:fabric-loader:${voxyProperty("loader_version")}"
 
