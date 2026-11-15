@@ -24,6 +24,7 @@ if (voxyTarget == "1.20.1") {
                     def isMainTree = candidate.startsWith(mainSourceRoot)
                     def replacedByLegacySource = [
                         "me/cortex/voxy/commonImpl/WorldIdentifier.java",
+                        "me/cortex/voxy/common/world/service/VoxelIngestService.java",
                         "me/cortex/voxy/client/VoxyCommands.java",
                         "me/cortex/voxy/common/voxelization/WorldConversionFactory.java",
                         "me/cortex/voxy/client/core/model/ModelStore.java",
