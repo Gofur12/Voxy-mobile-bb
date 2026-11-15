@@ -31,6 +31,7 @@ public class AutoBindingShader extends Shader {
     }
 
     public AutoBindingShader name(String name) {
+        this.assertContextCurrent();
         return GlDebug.name(name, this);
     }
 
@@ -119,7 +120,7 @@ public class AutoBindingShader extends Shader {
          */
         if (!this.bindings.isEmpty()) {
             for (var binding : this.bindings) {
-                binding.buffer.assertNotFreed();
+                binding.buffer.assertContextCurrent();
                 if (binding.offset == 0 && binding.size == -1) {
                     GlBackendRuntime.requireBackend().bindBufferBase(binding.target, binding.index, binding.buffer.id);
                 } else {
@@ -134,7 +135,7 @@ public class AutoBindingShader extends Shader {
         if (!this.textureBindings.isEmpty()) {
             for (var binding : this.textureBindings) {
                 if (binding.texture != null) {
-                    binding.texture.assertNotFreed();
+                    binding.texture.assertContextCurrent();
                     GlBackendRuntime.requireBackend().bindTextureUnit(binding.unit, binding.texture.id);
                 }
                 if (binding.sampler != -1) {
