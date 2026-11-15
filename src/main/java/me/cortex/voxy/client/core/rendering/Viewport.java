@@ -35,7 +35,7 @@ public abstract class Viewport <A extends Viewport<A>> {
     public double cameraX;
     public double cameraY;
     public double cameraZ;
-    public Object fogParameters;
+    public me.cortex.voxy.client.core.VoxyFogParameters fogParameters;
 
     public final Matrix4f MVP = new Matrix4f();
     public final Vector3i section = new Vector3i();
@@ -97,7 +97,7 @@ public abstract class Viewport <A extends Viewport<A>> {
         return (A) this;
     }
 
-    public A setFogParameters(Object fogParameters) {
+    public A setFogParameters(me.cortex.voxy.client.core.VoxyFogParameters fogParameters) {
         this.fogParameters = fogParameters;
         return (A) this;
     }
