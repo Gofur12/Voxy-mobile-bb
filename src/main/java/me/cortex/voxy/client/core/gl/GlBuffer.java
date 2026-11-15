@@ -74,6 +74,11 @@ public class GlBuffer extends TrackedObject {
         }
     }
 
+    public void assertContextCurrent() {
+        this.assertNotFreed();
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlBuffer");
+    }
+
     public boolean isSparse() {
         return (this.flags & GL_SPARSE_STORAGE_BIT_ARB) != 0;
     }
