@@ -100,7 +100,19 @@ public interface GlBackend extends AutoCloseable {
     int createTextureView(int source, int target, int internalFormat,
                           int minLevel, int levelCount, int minLayer, int layerCount);
 
-    /** Clears one texture mip level to zero using a format-aware semantic clear type. */
+    /**
+     * Clears one 2D texture mip level to numeric zero using a format-aware semantic clear type.
+     *
+     * Implementations must preserve all caller-visible graphics state changed by the operation.
+     * A backend that uses a temporary framebuffer must restore the previous draw/read framebuffer
+     * bindings, draw-buffer selection, scissor enable/box, and relevant color/depth/stencil write
+     * masks before returning. The operation must not change the current program, viewport, or
+     * texture bindings. Unsupported formats or incomplete temporary framebuffers must fail
+     * explicitly; silently skipping a clear is not permitted.
+     *
+     * The backend owns any temporary framebuffer resources and must keep them scoped to the
+     * active context generation. This contract does not transfer graphics-context ownership.
+     */
     void clearTextureImage(int handle, int level, GlTextureClearType clearType);
 
     void allocateTexture2D(int handle, int levels, int internalFormat, int width, int height);
