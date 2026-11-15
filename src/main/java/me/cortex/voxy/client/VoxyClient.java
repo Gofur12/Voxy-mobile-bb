@@ -31,11 +31,11 @@ public class VoxyClient implements ClientModInitializer {
 
         Capabilities.init();//Capture capabilities for this active graphics context
 
-        if (Capabilities.INSTANCE.hasBrokenDepthSampler) {
+        if (Capabilities.require().hasBrokenDepthSampler) {
             Logger.error("AMD broken depth sampler detected, voxy does not work correctly and has been disabled, this will hopefully be fixed in the future");
         }
 
-        boolean systemSupported = Capabilities.INSTANCE.compute && Capabilities.INSTANCE.indirectParameters && !Capabilities.INSTANCE.hasBrokenDepthSampler;
+        boolean systemSupported = Capabilities.require().compute && Capabilities.require().indirectParameters && !Capabilities.require().hasBrokenDepthSampler;
         if (!systemSupported) {
              Logger.error("Voxy is unsupported on your system.");
         }
@@ -63,7 +63,7 @@ public class VoxyClient implements ClientModInitializer {
 
             VoxyCommon.setInstanceFactory(VoxyClientInstance::new);
 
-            if (!Capabilities.INSTANCE.subgroup) {
+            if (!Capabilities.require().subgroup) {
                 Logger.warn("GPU does not support subgroup operations, expect some performance degradation");
             }
 
