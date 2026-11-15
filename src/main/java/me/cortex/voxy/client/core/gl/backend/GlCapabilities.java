@@ -73,6 +73,11 @@ public final class GlCapabilities {
         return this.computeShaders && this.shaderStorageBuffers && this.imageLoadStore;
     }
 
+    /** Compute-based LOD candidate for an embedded context (for example GLES 3.1+). */
+    public boolean supportsGlesComputeLodPath() {
+        return this.embeddedProfile && this.supportsGles3BasicRasterPath() && this.supportsComputeLodPath();
+    }
+
     /**
      * The current MDIC renderer is a desktop compute/indirect-draw pipeline.
      * Keep this predicate conservative: an embedded context must never be
