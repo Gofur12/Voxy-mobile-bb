@@ -108,6 +108,28 @@ public final class GlBackendRuntime {
         return backend != null && initializationThread == Thread.currentThread();
     }
 
+    /**
+     * Returns whether a resource belongs to the currently initialized context.
+     * This deliberately returns false after context loss, allowing wrappers to
+     * release Java-side tracking without issuing invalid GL deletion calls.
+     */
+    public static synchronized boolean isContextGenerationCurrent(long generation) {
+        return backend != null && contextGeneration == generation;
+    }
+
+    /**
+     * Returns the backend only if the caller's resource belongs to the active
+     * context generation and the caller is on its context thread.
+     */
+    public static synchronized GlBackend requireBackend(long generation, String resourceType) {
+        GlBackend current = requireBackend();
+        if (contextGeneration != generation) {
+            throw new IllegalStateException(resourceType + " belongs to stale GL context generation "
+                    + generation + "; current generation is " + contextGeneration);
+        }
+        return current;
+    }
+
     /** Monotonically increases each time a new backend/context is initialized. */
     public static synchronized long getContextGeneration() {
         return contextGeneration;
