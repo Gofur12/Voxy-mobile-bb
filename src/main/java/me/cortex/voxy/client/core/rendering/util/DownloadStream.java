@@ -128,7 +128,7 @@ public class DownloadStream {
      * synchronous rather than pretending to provide persistent asynchronous readback.
      */
     private void downloadCpu(GlBuffer buffer, long sourceOffset, long size, DownloadResultConsumer consumer) {
-        GlBackend backend = GlBackendRuntime.requireBackend();
+        GlBackend backend = GlBackendRuntime.requireBackend(this.contextGeneration, "DownloadStream");
         long destination = MemoryUtil.nmemAlloc(size);
         if (destination == 0L) {
             throw new OutOfMemoryError("Unable to allocate CPU download staging memory (" + size + " bytes)");
@@ -175,7 +175,7 @@ public class DownloadStream {
         for (var entry : this.downloadList) {
             GlBackendRuntime.requireBackend(this.contextGeneration, "DownloadStream").copyBufferSubData(entry.target.id, this.downloadBuffer.id, entry.targetOffset, entry.downloadStreamOffset, entry.size);
         }
-        GlBackendRuntime.requireBackend().memoryBarrier(CLIENT_MAPPED_BUFFER_BARRIER_BIT | BUFFER_UPDATE_BARRIER_BIT);
+        GlBackendRuntime.requireBackend(this.contextGeneration, "DownloadStream").memoryBarrier(CLIENT_MAPPED_BUFFER_BARRIER_BIT | BUFFER_UPDATE_BARRIER_BIT);
         this.thisFrameDownloadList.addAll(this.downloadList);
         this.downloadList.clear();
         this.caddr = -1;
@@ -243,7 +243,7 @@ public class DownloadStream {
             return;
         }
 
-        GlBackendRuntime.requireBackend().finish();
+        GlBackendRuntime.requireBackend(this.contextGeneration, "DownloadStream").finish();
 
         // The GPU is idle now: discard queued callbacks and release every
         // allocation, including copies committed since the last tick/fence.
@@ -301,12 +301,12 @@ public class DownloadStream {
             }
             return;
         }
-        GlBackendRuntime.requireBackend().finish();
+        GlBackendRuntime.requireBackend(this.contextGeneration, "DownloadStream").finish();
         this.tick();
         var fence = new GlFence();
-        GlBackendRuntime.requireBackend().finish();
+        GlBackendRuntime.requireBackend(this.contextGeneration, "DownloadStream").finish();
         while (!fence.signaled()) {
-            GlBackendRuntime.requireBackend().finish();
+            GlBackendRuntime.requireBackend(this.contextGeneration, "DownloadStream").finish();
             Thread.onSpinWait();
         }
         fence.free();
