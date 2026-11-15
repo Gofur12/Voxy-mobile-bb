@@ -21,7 +21,6 @@ import static org.lwjgl.opengl.GL11.GL_TRIANGLES;
 import static org.lwjgl.opengl.GL11.GL_UNSIGNED_BYTE;
 import static org.lwjgl.opengl.GL15.GL_ELEMENT_ARRAY_BUFFER;
 import static org.lwjgl.opengl.GL15.glBindBuffer;
-import static org.lwjgl.opengl.GL30.glBindVertexArray;
 import static org.lwjgl.opengl.GL30C.*;
 import static org.lwjgl.opengl.GL31.glDrawElementsInstanced;
 import static org.lwjgl.opengl.GL42.glDrawElementsInstancedBaseInstance;
@@ -32,10 +31,12 @@ public class BoundRenderer {
     private final GlBuffer uniformBuffer = new GlBuffer(128);
     private final Shader rasterShader;
     private final RenderProperties properties;
+    private final GlVertexArray emptyVao;
 
     private final AbstractRenderPipeline pipeline;
     public BoundRenderer(AbstractRenderPipeline pipeline) {
         this.properties = pipeline.properties;
+        this.emptyVao = new GlVertexArray();
 
         String vert = ShaderLoader.parse("voxy:chunkoutline/outline.vsh");
         String taa = pipeline.taaFunction("getTAA");
@@ -110,7 +111,7 @@ public class BoundRenderer {
             glDepthFunc(this.properties.furtherDepthCompare());
         }
 
-        glBindVertexArray(GlVertexArray.STATIC_VAO);
+        this.emptyVao.bind();
         viewport.depthBoundingBuffer.bind();
         this.rasterShader.bind();
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, SharedIndexBuffer.INSTANCE_BB_BYTE.id());
@@ -137,6 +138,7 @@ public class BoundRenderer {
     }
 
     public void free() {
+        this.emptyVao.free();
         this.rasterShader.free();
         this.uniformBuffer.free();
     }
