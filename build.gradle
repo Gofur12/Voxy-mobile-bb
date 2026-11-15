@@ -11,6 +11,20 @@ plugins {
 def voxyTarget = providers.gradleProperty("voxyTarget").getOrElse("26.3")
 apply plugin: (voxyTarget == "1.20.1" ? "net.fabricmc.fabric-loom-remap" : "net.fabricmc.fabric-loom")
 
+// Sodium's modern config API is absent from the 1.20.1 Sodium 0.5.13 profile.
+// Keep those optional UI adapters out of the legacy compile instead of stubbing Sodium APIs.
+if (voxyTarget == "1.20.1") {
+    sourceSets {
+        main {
+            java {
+                exclude "me/cortex/voxy/client/config/SodiumConfigBuilder.java"
+                exclude "me/cortex/voxy/client/config/VoxyConfigMenu.java"
+                exclude "me/cortex/voxy/client/config/ModMenuIntegration.java"
+            }
+        }
+    }
+}
+
 def voxyProfile = [:]
 switch (voxyTarget) {
     case "26.3":
@@ -171,7 +185,7 @@ processResources {
     var version = project.version
 
     def access_widener = voxyTarget == "1.20.1" ? "voxy-1.20.1.accesswidener" : "voxy.accesswidener"
-    def props = ["version": version, "commit": hash, "buildtime": time, "allowed_sodium_versions": sodium_versions, "allowed_mc_version": allowed_mc_version, "access_widener": access_widener]
+    def props = ["version": version, "commit": hash, "buildtime": time, "allowed_sodium_versions": sodium_versions, "allowed_mc_version": allowed_mc_version, "access_widener": access_widener, "modmenu_entrypoint": voxyTarget == "1.20.1" ? "" : '"me.cortex.voxy.client.config.ModMenuIntegration"', "sodium_config_entrypoint": voxyTarget == "1.20.1" ? "" : '"me.cortex.voxy.client.config.VoxyConfigMenu"']
 
     for (var prop : props) {
         String value = prop.value;
