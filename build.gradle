@@ -25,14 +25,22 @@ if (voxyTarget == "1.20.1") {
                     def replacedByLegacySource = [
                         "me/cortex/voxy/commonImpl/WorldIdentifier.java",
                         "me/cortex/voxy/client/core/model/ModelStore.java",
-                        "me/cortex/voxy/client/core/gl/shader/ShaderLoader.java"
+                        "me/cortex/voxy/client/core/gl/shader/ShaderLoader.java",
+                        "me/cortex/voxy/client/core/rendering/ViewportSelector.java",
+                        "me/cortex/voxy/client/DebugEntries.java"
                     ].contains(element.path)
                     def modernConfigOnly = [
                         "me/cortex/voxy/client/config/SodiumConfigBuilder.java",
                         "me/cortex/voxy/client/config/VoxyConfigMenu.java",
                         "me/cortex/voxy/client/config/ModMenuIntegration.java"
                     ].contains(element.path)
-                    return isMainTree && (replacedByLegacySource || modernConfigOnly)
+                    def optionalModernIntegration = [
+                        "me/cortex/voxy/client/VoxyDebugScreenEntry.java",
+                        "me/cortex/voxy/client/mixin/minecraft/MixinDebugScreenEntryList.java",
+                        "me/cortex/voxy/client/mixin/minecraft/util/MixinGlDebug.java",
+                        "me/cortex/voxy/client/mixin/nvidium/MixinRenderPipeline.java"
+                    ].contains(element.path)
+                    return isMainTree && (replacedByLegacySource || modernConfigOnly || optionalModernIntegration)
                 }
             }
         }
@@ -199,7 +207,7 @@ processResources {
     var version = project.version
 
     def access_widener = voxyTarget == "1.20.1" ? "voxy-1.20.1.accesswidener" : "voxy.accesswidener"
-    def props = ["version": version, "commit": hash, "buildtime": time, "allowed_sodium_versions": sodium_versions, "allowed_mc_version": allowed_mc_version, "access_widener": access_widener, "modmenu_entrypoint": voxyTarget == "1.20.1" ? "" : '"me.cortex.voxy.client.config.ModMenuIntegration"', "sodium_config_entrypoint": voxyTarget == "1.20.1" ? "" : '"me.cortex.voxy.client.config.VoxyConfigMenu"']
+    def props = ["version": version, "commit": hash, "buildtime": time, "allowed_sodium_versions": sodium_versions, "allowed_mc_version": allowed_mc_version, "access_widener": access_widener, "modmenu_entrypoint": voxyTarget == "1.20.1" ? "" : '"me.cortex.voxy.client.config.ModMenuIntegration"', "sodium_config_entrypoint": voxyTarget == "1.20.1" ? "" : '"me.cortex.voxy.client.config.VoxyConfigMenu"', "client_mixin_config": voxyTarget == "1.20.1" ? '"client.voxy.1.20.1.mixins.json"' : '"client.voxy.mixins.json"']
 
     for (var prop : props) {
         String value = prop.value;
