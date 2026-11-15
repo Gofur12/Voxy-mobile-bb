@@ -104,6 +104,10 @@ public interface GlBackend extends AutoCloseable {
 
     void allocateTexture2D(int handle, int levels, int internalFormat, int width, int height);
 
+    /** Uploads client-memory pixels into a 2D texture level using the portable bind-based API. */
+    void uploadTexture2D(int handle, int level, int x, int y, int width, int height,
+                         int format, int type, long dataAddress);
+
     void deleteTexture(int handle);
 
     int createFramebuffer();
