@@ -5,16 +5,8 @@ import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
 
 import java.util.Arrays;
 
-import static org.lwjgl.opengl.GL30.glGenVertexArrays;
 
 public class GlVertexArray extends TrackedObject {
-    /**
-     * Legacy shared VAO used by callers that only need a VAO bound.
-     * Kept on the legacy LWJGL path because this static field may be
-     * initialized before GlBackendRuntime has a current backend/context.
-     */
-    public static final int STATIC_VAO = glGenVertexArrays();
-
     public final int id;
     private final long contextGeneration;
     private int[] indices = new int[0];
