@@ -6,6 +6,7 @@ import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
 
 public class GlRenderBuffer extends TrackedObject {
     public final int id;
+    private final long contextGeneration;
 
     public GlRenderBuffer(int format, int width, int height) {
         if (width <= 0 || height <= 0) {
@@ -13,6 +14,7 @@ public class GlRenderBuffer extends TrackedObject {
         }
         GlBackend backend = GlBackendRuntime.requireBackend();
         this.id = backend.createRenderbuffer();
+        this.contextGeneration = GlBackendRuntime.getContextGeneration();
         try {
             backend.allocateRenderbuffer(this.id, format, width, height);
         } catch (RuntimeException | Error allocationFailure) {
@@ -28,6 +30,8 @@ public class GlRenderBuffer extends TrackedObject {
     @Override
     public void free() {
         super.free0();
-        GlBackendRuntime.requireBackend().deleteRenderbuffer(this.id);
+        if (GlBackendRuntime.isContextGenerationCurrent(this.contextGeneration)) {
+            GlBackendRuntime.requireBackend(this.contextGeneration, "GlRenderBuffer").deleteRenderbuffer(this.id);
+        }
     }
 }
