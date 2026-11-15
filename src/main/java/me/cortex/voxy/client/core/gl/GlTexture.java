@@ -93,6 +93,7 @@ public class GlTexture extends TrackedObject {
 
     public GlTexture name(String name) {
         this.assertAllocated();
+        this.assertContextCurrent();
         return GlDebug.name(name, this);
     }
 
@@ -148,6 +149,10 @@ public class GlTexture extends TrackedObject {
             size = Math.addExact(size, Math.multiplyExact(Math.multiplyExact(levelWidth, levelHeight), elemSize));
         }
         return size;
+    }
+
+    public void assertContextCurrent() {
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlTexture");
     }
 
     public void assertAllocated() {
