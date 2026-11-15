@@ -28,6 +28,7 @@ public class GlRenderBuffer extends TrackedObject {
     }
 
     public void assertContextCurrent() {
+        this.assertNotFreed();
         GlBackendRuntime.requireBackend(this.contextGeneration, "GlRenderBuffer");
     }
 
