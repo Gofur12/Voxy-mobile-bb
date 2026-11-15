@@ -8,18 +8,24 @@ import java.util.Arrays;
 import static org.lwjgl.opengl.GL30.glGenVertexArrays;
 
 public class GlVertexArray extends TrackedObject {
+    /**
+     * Legacy shared VAO used by callers that only need a VAO bound.
+     * Kept on the legacy LWJGL path because this static field may be
+     * initialized before GlBackendRuntime has a current backend/context.
+     */
     public static final int STATIC_VAO = glGenVertexArrays();
 
     public final int id;
     private int[] indices = new int[0];
     private int stride;
+
     public GlVertexArray() {
         this.id = GlBackendRuntime.requireBackend().createVertexArray();
     }
 
     @Override
     public void free() {
-        this.free0();
+        super.free0();
         GlBackendRuntime.requireBackend().deleteVertexArray(this.id);
     }
 
@@ -28,7 +34,9 @@ public class GlVertexArray extends TrackedObject {
     }
 
     public GlVertexArray bindBuffer(int buffer) {
-        //TODO: optimization, use glVertexArrayVertexBuffers
+        if (this.stride <= 0) {
+            throw new IllegalStateException("Vertex stride must be set to a positive value before binding a vertex buffer");
+        }
         for (int index : this.indices) {
             GlBackendRuntime.requireBackend().bindVertexArrayVertexBuffer(this.id, index, buffer, 0, this.stride);
         }
@@ -41,14 +49,18 @@ public class GlVertexArray extends TrackedObject {
     }
 
     public GlVertexArray setStride(int stride) {
+        if (stride <= 0) {
+            throw new IllegalArgumentException("Vertex stride must be positive");
+        }
         this.stride = stride;
         return this;
     }
 
     public GlVertexArray setI(int index, int type, int count, int offset) {
-        this.addIndex(index);
+        validateAttribute(index, count, offset);
         GlBackendRuntime.requireBackend().enableVertexArrayAttribute(this.id, index);
         GlBackendRuntime.requireBackend().setVertexArrayIntegerAttributeFormat(this.id, index, count, type, offset);
+        this.addIndex(index);
         return this;
     }
 
@@ -57,10 +69,23 @@ public class GlVertexArray extends TrackedObject {
     }
 
     public GlVertexArray setF(int index, int type, int count, boolean normalize, int offset) {
-        this.addIndex(index);
+        validateAttribute(index, count, offset);
         GlBackendRuntime.requireBackend().enableVertexArrayAttribute(this.id, index);
         GlBackendRuntime.requireBackend().setVertexArrayFloatAttributeFormat(this.id, index, count, type, normalize, offset);
+        this.addIndex(index);
         return this;
+    }
+
+    private static void validateAttribute(int index, int count, int offset) {
+        if (index < 0) {
+            throw new IllegalArgumentException("Vertex attribute index must not be negative");
+        }
+        if (count < 1 || count > 4) {
+            throw new IllegalArgumentException("Vertex attribute component count must be between 1 and 4");
+        }
+        if (offset < 0) {
+            throw new IllegalArgumentException("Vertex attribute offset must not be negative");
+        }
     }
 
     private void addIndex(int index) {
@@ -69,7 +94,7 @@ public class GlVertexArray extends TrackedObject {
                 return;
             }
         }
-        this.indices = Arrays.copyOf(this.indices, this.indices.length+1);
-        this.indices[this.indices.length-1] = index;
+        this.indices = Arrays.copyOf(this.indices, this.indices.length + 1);
+        this.indices[this.indices.length - 1] = index;
     }
 }
