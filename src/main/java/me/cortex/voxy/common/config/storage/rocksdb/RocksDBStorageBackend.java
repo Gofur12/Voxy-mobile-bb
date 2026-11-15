@@ -270,14 +270,24 @@ public class RocksDBStorageBackend extends StorageBackend {
         }
     }
 
+    private static long expandBits(long value, long mask) {
+        long result = 0;
+        for (long sourceBit = 1; mask != 0; sourceBit <<= 1) {
+            long targetBit = mask & -mask;
+            if ((value & sourceBit) != 0) result |= targetBit;
+            mask &= mask - 1;
+        }
+        return result;
+    }
+
     private static long swizzlePos(long key) {
         if (true) {
             return key;
         }
         if (WorldEngine.POS_FORMAT_VERSION != 1) throw new IllegalStateException("TODO: UPDATE THIS");
         return  (key&(0xFL<<60)) |
-                Long.expand((key>>> 4)&((1L<<24)-1), 0b01010101010101010101010101010101_001001001001001001001001L) |
-                Long.expand((key>>>52)&0xFF,         0b00000000000000000000000000000000_100100100100100100100100L) |
-                Long.expand((key>>>28)&((1L<<24)-1), 0b10101010101010101010101010101010_010010010010010010010010L);
+                expandBits((key>>> 4)&((1L<<24)-1), 0b01010101010101010101010101010101_001001001001001001001001L) |
+                expandBits((key>>>52)&0xFF,         0b00000000000000000000000000000000_100100100100100100100100L) |
+                expandBits((key>>>28)&((1L<<24)-1), 0b10101010101010101010101010101010_010010010010010010010010L);
     }
 }
