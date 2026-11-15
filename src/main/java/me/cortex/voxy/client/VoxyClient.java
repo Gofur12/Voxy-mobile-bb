@@ -29,7 +29,7 @@ public class VoxyClient implements ClientModInitializer {
             return;
         }
 
-        Capabilities.init();//Ensure clinit is called
+        Capabilities.init();//Capture capabilities for this active graphics context
 
         if (Capabilities.INSTANCE.hasBrokenDepthSampler) {
             Logger.error("AMD broken depth sampler detected, voxy does not work correctly and has been disabled, this will hopefully be fixed in the future");
@@ -82,6 +82,8 @@ public class VoxyClient implements ClientModInitializer {
             shutdownFailure = failure;
             Logger.error("Failed to shut down Voxy instance before graphics teardown", failure);
         }
+
+        Capabilities.clear();
 
         if (GlBackendRuntime.isInitialized()) {
             try {
