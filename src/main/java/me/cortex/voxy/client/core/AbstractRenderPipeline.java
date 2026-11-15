@@ -48,7 +48,6 @@ import static org.lwjgl.opengl.GL42.GL_TEXTURE_MIN_FILTER;
 import static org.lwjgl.opengl.GL42.glDepthFunc;
 import static org.lwjgl.opengl.GL42.glDepthMask;
 import static org.lwjgl.opengl.GL42.glUniform2f;
-import static org.lwjgl.opengl.GL42.nglUniformMatrix4fv;
 import static org.lwjgl.opengl.GL45.glClearNamedFramebufferfi;
 import static org.lwjgl.opengl.GL45C.glBindTextureUnit;
 
@@ -76,6 +75,14 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
     protected AbstractRenderPipeline(RenderProperties properties, AsyncNodeManager nodeManager, NodeCleaner nodeCleaner, HierarchicalOcclusionTraverser traversal, BooleanSupplier frexSupplier, boolean deferTranslucency) {
         GlBackendRuntime.requireBackend();
         this.contextGeneration = GlBackendRuntime.getContextGeneration();
+        this.properties = properties;
+        this.frexStillHasWork = frexSupplier;
+        this.nodeManager = nodeManager;
+        this.nodeCleaner = nodeCleaner;
+        this.traversal = traversal;
+        this.deferTranslucency = deferTranslucency;
+
+        this.depthStencilSetup = new FullscreenBlit(properties, "voxy:post/fullscreen2.vert", "voxy:post/setup_stencil_depth.frag");
         this.depthSampler = org.lwjgl.opengl.GL33C.glGenSamplers();
         if (this.depthSampler == 0) {
             throw new IllegalStateException("Unable to create depth sampler");
@@ -91,14 +98,6 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
             }
             throw failure;
         }
-        this.properties = properties;
-        this.frexStillHasWork = frexSupplier;
-        this.nodeManager = nodeManager;
-        this.nodeCleaner = nodeCleaner;
-        this.traversal = traversal;
-        this.deferTranslucency = deferTranslucency;
-
-        this.depthStencilSetup = new FullscreenBlit(properties, "voxy:post/fullscreen2.vert", "voxy:post/setup_stencil_depth.frag");
     }
 
     //Allows pipelines to configure model baking system
@@ -249,14 +248,20 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
 
     @Override
     protected void free0() {
-        this.scratchFramebuffer.free();
-        this.fb.free();
-        this.sectionRenderer.free();
-        this.depthStencilSetup.delete();
-        if (GlBackendRuntime.isContextGenerationCurrent(this.contextGeneration)) {
-            org.lwjgl.opengl.GL33C.glDeleteSamplers(this.depthSampler);
+        try {
+            this.scratchFramebuffer.free();
+            this.fb.free();
+            this.sectionRenderer.free();
+            this.depthStencilSetup.delete();
+        } finally {
+            try {
+                if (GlBackendRuntime.isContextGenerationCurrent(this.contextGeneration)) {
+                    org.lwjgl.opengl.GL33C.glDeleteSamplers(this.depthSampler);
+                }
+            } finally {
+                super.free0();
+            }
         }
-        super.free0();
     }
 
     public void addDebug(List<String> debug) {
