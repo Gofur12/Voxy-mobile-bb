@@ -14,8 +14,9 @@ public class GlFence extends TrackedObject {
     }
 
     public boolean signaled() {
+        var backend = GlBackendRuntime.requireBackend(this.contextGeneration, "GlFence");
         if (!this.signaled) {
-            this.signaled = GlBackendRuntime.requireBackend(this.contextGeneration, "GlFence").isFenceSignaled(this.fence);
+            this.signaled = backend.isFenceSignaled(this.fence);
         }
         return this.signaled;
     }
