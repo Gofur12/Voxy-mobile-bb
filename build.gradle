@@ -176,10 +176,10 @@ processResources {
 
     inputs.properties(props);
     filesMatching("fabric.mod.json") {
-        filter {line->line.replace("\"\${","\${").replace("}\"", "}")};
-        expand(props);
-    }
-}
+        filter { line -> line.replace("voxy-1.20.1.accesswidener", access_widener) }
+        filter { line -> line.replace("\"${", "${").replace("}\"", "}") }
+        expand(props)
+    }}
 
 
 var dummySodiumProviderGenerator = tasks.register("dummySodiumProviderGenerator", Jar) {
