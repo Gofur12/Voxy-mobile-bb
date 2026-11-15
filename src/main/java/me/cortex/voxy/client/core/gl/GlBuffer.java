@@ -12,6 +12,7 @@ public class GlBuffer extends TrackedObject {
     public final int id;
     private final long size;
     private final int flags;
+    private final long contextGeneration;
 
     private static int COUNT;
     private static long TOTAL_SIZE;
@@ -42,6 +43,7 @@ public class GlBuffer extends TrackedObject {
         this.size = size;
         GlBackend backend = GlBackendRuntime.requireBackend();
         this.id = backend.createBuffer(size, data, flags);
+        this.contextGeneration = GlBackendRuntime.getContextGeneration();
         try {
             if ((flags & GL_SPARSE_STORAGE_BIT_ARB) == 0 && zero) {
                 this.zero();
@@ -63,7 +65,9 @@ public class GlBuffer extends TrackedObject {
     public void free() {
         this.free0();
         try {
-            GlBackendRuntime.requireBackend().deleteBuffer(this.id);
+            if (GlBackendRuntime.isContextGenerationCurrent(this.contextGeneration)) {
+                GlBackendRuntime.requireBackend(this.contextGeneration, "GlBuffer").deleteBuffer(this.id);
+            }
         } finally {
             COUNT--;
             TOTAL_SIZE -= this.size;
@@ -130,7 +134,7 @@ public class GlBuffer extends TrackedObject {
                 }
             }
 
-            GlBackend backend = GlBackendRuntime.requireBackend();
+            GlBackend backend = GlBackendRuntime.requireBackend(this.contextGeneration, "GlBuffer");
             long remaining = length;
             long destination = offset;
             while (remaining > 0) {
