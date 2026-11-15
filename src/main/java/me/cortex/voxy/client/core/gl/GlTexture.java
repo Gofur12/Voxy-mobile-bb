@@ -40,18 +40,27 @@ public class GlTexture extends TrackedObject {
         if (this.hasAllocated) {
             throw new IllegalStateException("Texture already allocated");
         }
-        this.hasAllocated = true;
-
-        this.format = format;
-        if (this.type == GL_TEXTURE_2D) {
-            GlBackendRuntime.requireBackend().allocateTexture2D(this.id, levels, format, width, height);
-            this.width = width;
-            this.height = height;
-            this.levels = levels;
-        } else {
-            throw new IllegalStateException("Unknown texture type");
+        if (this.type != GL_TEXTURE_2D) {
+            throw new IllegalStateException("Only 2D texture storage is supported by this wrapper");
         }
-        ESTIMATED_TOTAL_SIZE += this.getEstimatedSize();
+        if (width <= 0 || height <= 0 || levels <= 0) {
+            throw new IllegalArgumentException("Texture dimensions and mip level count must be positive");
+        }
+        int maxLevels = 32 - Integer.numberOfLeadingZeros(Math.max(width, height));
+        if (levels > maxLevels) {
+            throw new IllegalArgumentException("Mip level count " + levels + " exceeds maximum " + maxLevels);
+        }
+
+        long estimatedSize = this.estimateSize(format, levels, width, height);
+        GlBackendRuntime.requireBackend().allocateTexture2D(this.id, levels, format, width, height);
+
+        // Publish wrapper state only after backend allocation succeeds.
+        this.format = format;
+        this.width = width;
+        this.height = height;
+        this.levels = levels;
+        this.hasAllocated = true;
+        ESTIMATED_TOTAL_SIZE = Math.addExact(ESTIMATED_TOTAL_SIZE, estimatedSize);
         return this;
     }
 
@@ -64,13 +73,16 @@ public class GlTexture extends TrackedObject {
 
     @Override
     public void free() {
-        if (this.hasAllocated) {
-            ESTIMATED_TOTAL_SIZE -= this.getEstimatedSize();
-        }
-        COUNT--;
+        boolean allocated = this.hasAllocated;
+        long estimatedSize = allocated ? this.getEstimatedSize() : 0L;
         this.hasAllocated = false;
         super.free0();
-        GlBackendRuntime.requireBackend().deleteTexture(this.id);
+        try {
+            GlBackendRuntime.requireBackend().deleteTexture(this.id);
+        } finally {
+            COUNT--;
+            if (allocated) ESTIMATED_TOTAL_SIZE -= estimatedSize;
+        }
     }
 
     public GlTexture name(String name) {
@@ -113,18 +125,21 @@ public class GlTexture extends TrackedObject {
 
     private long getEstimatedSize() {
         this.assertAllocated();
-        long elemSize = switch (this.format) {
-            case GL_R32UI, GL_RGBA8, GL_DEPTH24_STENCIL8, GL_R32F, GL_RG16F -> 4;
-            case GL_DEPTH_COMPONENT24 -> 4;//TODO: check this is right????
-            case GL_DEPTH_COMPONENT32F -> 4;
-            case GL_DEPTH_COMPONENT32 -> 4;
+        return this.estimateSize(this.format, this.levels, this.width, this.height);
+    }
 
-            default -> throw new IllegalStateException("Unknown element size");
+    private long estimateSize(int format, int levels, int width, int height) {
+        long elemSize = switch (format) {
+            case GL_R32UI, GL_RGBA8, GL_DEPTH24_STENCIL8, GL_R32F, GL_RG16F,
+                    GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT32 -> 4;
+            default -> throw new IllegalStateException("Unknown texture element size for format: " + format);
         };
 
         long size = 0;
-        for (int lvl = 0; lvl < this.levels; lvl++) {
-            size += Math.max((((long)this.width)>>lvl), 1) * Math.max((((long)this.height)>>lvl), 1) * elemSize;
+        for (int lvl = 0; lvl < levels; lvl++) {
+            long levelWidth = Math.max(((long) width) >> lvl, 1L);
+            long levelHeight = Math.max(((long) height) >> lvl, 1L);
+            size = Math.addExact(size, Math.multiplyExact(Math.multiplyExact(levelWidth, levelHeight), elemSize));
         }
         return size;
     }
