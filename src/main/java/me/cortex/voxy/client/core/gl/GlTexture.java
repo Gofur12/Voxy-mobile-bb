@@ -126,7 +126,7 @@ public class GlTexture extends TrackedObject {
             case GL_R32UI -> GL_RED_INTEGER;
             case GL_R32F -> GL_RED;
             case GL_DEPTH_COMPONENT24,GL_DEPTH_COMPONENT32F,GL_DEPTH_COMPONENT32 -> GL_DEPTH_COMPONENT;
-            case GL_DEPTH24_STENCIL8 -> GL_DEPTH_STENCIL;
+            case GL_DEPTH24_STENCIL8, GL_DEPTH32F_STENCIL8 -> GL_DEPTH_STENCIL;
             default -> throw new IllegalStateException("Unknown format");
         };
     }
@@ -140,6 +140,7 @@ public class GlTexture extends TrackedObject {
         long elemSize = switch (format) {
             case GL_R32UI, GL_RGBA8, GL_DEPTH24_STENCIL8, GL_R32F, GL_RG16F,
                     GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT32 -> 4;
+            case GL_DEPTH32F_STENCIL8 -> 8;
             default -> throw new IllegalStateException("Unknown texture element size for format: " + format);
         };
 
@@ -190,17 +191,20 @@ public class GlTexture extends TrackedObject {
 
     public GlTexture zero() {
         this.assertAllocated();
-        int type = switch (this.format) {
-            case GL_R32UI -> GL_UNSIGNED_INT;
-            case GL_RGBA8 -> GL_INT;
-            case GL_R32F,GL_DEPTH_COMPONENT24,GL_DEPTH_COMPONENT32F,GL_DEPTH_COMPONENT32, GL_RG16F -> GL_FLOAT;
-            case GL_DEPTH24_STENCIL8 -> GL_UNSIGNED_INT_24_8;
-            case GL_DEPTH32F_STENCIL8 -> GL_FLOAT_32_UNSIGNED_INT_24_8_REV;
-            default -> throw new IllegalStateException("Unknown format");
+        GlTextureClearType clearType = switch (this.format) {
+            case GL_R32UI -> GlTextureClearType.RED_UNSIGNED_INT;
+            case GL_RGBA8 -> GlTextureClearType.RGBA_FLOAT;
+            case GL_R32F -> GlTextureClearType.RED_FLOAT;
+            case GL_RG16F -> GlTextureClearType.RG_FLOAT;
+            case GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT32 -> GlTextureClearType.DEPTH_FLOAT;
+            case GL_DEPTH24_STENCIL8 -> GlTextureClearType.DEPTH_STENCIL_UNSIGNED_INT_24_8;
+            case GL_DEPTH32F_STENCIL8 -> GlTextureClearType.DEPTH_STENCIL_FLOAT32_UNSIGNED_INT_24_8;
+            default -> throw new IllegalStateException("Unknown texture clear format: " + this.format);
         };
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlTexture");
         for (int lvl = 0; lvl < this.levels; lvl++) {
             GlBackendRuntime.requireBackend(this.contextGeneration, "GlTexture").clearTextureImage(
-                    this.id, lvl, this.getPixelTransferFormat(), type, 0);
+                    this.id, lvl, clearType);
         }
         return this;
     }
