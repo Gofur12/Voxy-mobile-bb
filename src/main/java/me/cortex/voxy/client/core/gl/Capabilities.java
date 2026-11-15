@@ -67,7 +67,7 @@ public class Capabilities {
         // desktop GLCapabilities for an EGL/GLES context.
         var backendCapabilities = backend.capabilities();
         if (backendCapabilities.embeddedProfile) {
-            this.sparseBuffer = backendCapabilities.bufferStorage;
+            this.sparseBuffer = false;
             this.compute = backendCapabilities.computeShaders;
             this.indirectParameters = backendCapabilities.indirectParameters;
             this.repFragTest = false;
