@@ -62,6 +62,7 @@ public class GlFramebuffer extends TrackedObject {
 
 
     public GlFramebuffer name(String name) {
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlFramebuffer");
         return GlDebug.name(name, this);
     }
 }
