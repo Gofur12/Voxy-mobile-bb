@@ -124,6 +124,7 @@ public class Capabilities {
     /** Creates a fresh capability snapshot after a graphics backend is active. */
     public static synchronized void init() {
         GlBackendRuntime.requireBackend();
+        INSTANCE = null;
         INSTANCE = new Capabilities();
     }
 
