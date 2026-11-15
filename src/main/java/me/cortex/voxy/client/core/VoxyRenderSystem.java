@@ -279,7 +279,7 @@ public class VoxyRenderSystem {
                 .setModelView(new Matrix4f(modelView))
                 .setCamera(cameraX, cameraY, cameraZ)
                 .setScreenSize(width, height)
-                .setFogParameters(fogParameters)
+                .setFogParameters(VoxyFogParameters.from(fogParameters))
                 .update();
 
         if (VoxyClient.getOcclusionDebugState()==0) {
