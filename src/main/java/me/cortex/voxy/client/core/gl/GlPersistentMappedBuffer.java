@@ -94,6 +94,7 @@ public class GlPersistentMappedBuffer extends TrackedObject {
     }
 
     public GlPersistentMappedBuffer name(String name) {
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlPersistentMappedBuffer");
         return GlDebug.name(name, this);
     }
 }
