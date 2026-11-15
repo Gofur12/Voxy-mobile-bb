@@ -22,6 +22,7 @@ public class GlPersistentMappedBuffer extends TrackedObject {
     public final int id;
     private final long size;
     private final long addr;
+    private final long contextGeneration;
 
     public GlPersistentMappedBuffer(long size, int flags) {
         if (size <= 0) throw new IllegalArgumentException("Persistent buffer size must be positive");
@@ -34,6 +35,7 @@ public class GlPersistentMappedBuffer extends TrackedObject {
         int storageFlags = GL_MAP_PERSISTENT_BIT
                 | (flags & (GL_MAP_COHERENT_BIT | GL_MAP_WRITE_BIT | GL_MAP_READ_BIT | GL_CLIENT_STORAGE_BIT));
         this.id = backend.createBuffer(size, 0L, storageFlags);
+        this.contextGeneration = GlBackendRuntime.getContextGeneration();
         this.size = size;
 
         long mappedAddress;
@@ -57,7 +59,11 @@ public class GlPersistentMappedBuffer extends TrackedObject {
     @Override
     public void free() {
         this.free0();
-        var backend = GlBackendRuntime.requireBackend();
+        if (!GlBackendRuntime.isContextGenerationCurrent(this.contextGeneration)) {
+            // The old context owns this mapping; its pointer and GL handle are invalid now.
+            return;
+        }
+        var backend = GlBackendRuntime.requireBackend(this.contextGeneration, "GlPersistentMappedBuffer");
         Throwable failure = null;
         try {
             if (!backend.unmapBuffer(this.id)) {
@@ -82,6 +88,8 @@ public class GlPersistentMappedBuffer extends TrackedObject {
     }
 
     public long addr() {
+        this.assertNotFreed();
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlPersistentMappedBuffer");
         return this.addr;
     }
 
