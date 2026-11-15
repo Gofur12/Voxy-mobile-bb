@@ -298,7 +298,16 @@ public final class DesktopGlBackend implements GlBackend {
         if (levels <= 0 || width <= 0 || height <= 0) {
             throw new IllegalArgumentException("Texture dimensions and mip levels must be positive");
         }
-        GL45C.glTextureStorage2D(handle, levels, internalFormat, width, height);
+
+        // Immutable storage through the bind-based API is available in GLES 3.0
+        // and avoids the desktop OpenGL 4.5 glTextureStorage2D DSA entry point.
+        int previousBinding = GL11C.glGetInteger(GL11C.GL_TEXTURE_BINDING_2D);
+        try {
+            GL11C.glBindTexture(GL11C.GL_TEXTURE_2D, handle);
+            GL42C.glTexStorage2D(GL11C.GL_TEXTURE_2D, levels, internalFormat, width, height);
+        } finally {
+            GL11C.glBindTexture(GL11C.GL_TEXTURE_2D, previousBinding);
+        }
     }
 
     @Override
