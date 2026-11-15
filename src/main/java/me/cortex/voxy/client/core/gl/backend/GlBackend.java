@@ -113,6 +113,26 @@ public interface GlBackend extends AutoCloseable {
     }
 
     /**
+     * Captures the framebuffer-related state that a temporary-FBO clear fallback
+     * may modify. Implementations must return a complete immutable snapshot.
+     *
+     * The default keeps existing backends source-compatible while explicitly
+     * refusing to advertise a state-preserving fallback they do not implement.
+     */
+    default GlFramebufferClearState captureFramebufferClearState() {
+        throw new UnsupportedOperationException(name() + " does not implement framebuffer-clear state capture");
+    }
+
+    /**
+     * Restores a snapshot produced by {@link #captureFramebufferClearState()}.
+     * Implementations must restore framebuffer bindings, draw/read buffer
+     * selection, scissor state, and color/depth/stencil write masks.
+     */
+    default void restoreFramebufferClearState(GlFramebufferClearState state) {
+        throw new UnsupportedOperationException(name() + " does not implement framebuffer-clear state restoration");
+    }
+
+    /**
      * Clears one 2D texture mip level to numeric zero using a format-aware semantic clear type.
      *
      * Implementations must preserve all caller-visible graphics state changed by the operation.
