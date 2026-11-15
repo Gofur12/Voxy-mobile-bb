@@ -47,5 +47,5 @@
     "iris": ">=1.12-",
     "voxyworldgenv2": "=2.2.2"
   },
-  "accessWidener": "${access_widener}"
+  "accessWidener": "voxy-1.20.1.accesswidener"
 }
