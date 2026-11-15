@@ -2,6 +2,7 @@ package me.cortex.voxy.client.core.gl.backend.desktop;
 
 import me.cortex.voxy.client.core.gl.backend.GlBackend;
 import me.cortex.voxy.client.core.gl.backend.GlCapabilities;
+import me.cortex.voxy.client.core.gl.backend.GlTextureClearType;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11C;
 import org.lwjgl.opengl.GL15C;
