@@ -12,6 +12,19 @@ import java.util.Objects;
  * replacement context is initialized.
  */
 public final class GlBackendRuntime {
+    /**
+     * Lifecycle of the backend binding, not a claim that renderer resources
+     * have been reconstructed. LOST requires higher-level owners to discard
+     * stale resources before a replacement backend is used.
+     */
+    public enum State {
+        UNINITIALIZED,
+        ACTIVE,
+        CONTEXT_LOST,
+        SHUTDOWN
+    }
+
+    private static State state = State.UNINITIALIZED;
     private static GlBackend backend;
     private static Thread initializationThread;
     private static long contextGeneration;
@@ -26,6 +39,9 @@ public final class GlBackendRuntime {
      */
     public static synchronized boolean initialize(GlBackendProvider... providers) {
         Objects.requireNonNull(providers, "providers");
+        if (state == State.SHUTDOWN) {
+            throw new IllegalStateException("Voxy GPU backend runtime has been shut down");
+        }
         if (backend != null) {
             if (initializationThread != Thread.currentThread()) {
                 throw new IllegalStateException("Voxy GPU backend is already bound to another thread");
@@ -41,6 +57,7 @@ public final class GlBackendRuntime {
                 if (candidate != null) {
                     backend = candidate;
                     initializationThread = Thread.currentThread();
+                    state = State.ACTIVE;
                     contextGeneration++;
                     Logger.info("Selected Voxy GPU backend: " + candidate.name()
                             + " (context generation " + contextGeneration + ")");
@@ -80,6 +97,7 @@ public final class GlBackendRuntime {
     public static synchronized void onContextLost() {
         backend = null;
         initializationThread = null;
+        state = State.CONTEXT_LOST;
     }
 
     /**
@@ -87,7 +105,10 @@ public final class GlBackendRuntime {
      * Use onContextLost() instead when the context is already unavailable.
      */
     public static synchronized void shutdown() {
-        if (backend == null) return;
+        if (backend == null) {
+            state = State.SHUTDOWN;
+            return;
+        }
         if (initializationThread != Thread.currentThread()) {
             throw new IllegalStateException("Voxy GPU backend must be shut down on its context thread");
         }
@@ -97,7 +118,13 @@ public final class GlBackendRuntime {
         } finally {
             backend = null;
             initializationThread = null;
+            state = State.SHUTDOWN;
         }
+    }
+
+    /** Returns the explicit backend lifecycle state. */
+    public static synchronized State getState() {
+        return state;
     }
 
     public static synchronized boolean isInitialized() {
