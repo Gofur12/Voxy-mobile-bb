@@ -202,10 +202,9 @@ public class GlTexture extends TrackedObject {
             case GL_DEPTH32F_STENCIL8 -> GlTextureClearType.DEPTH_STENCIL_FLOAT32_UNSIGNED_INT_24_8;
             default -> throw new IllegalStateException("Unknown texture clear format: " + this.format);
         };
-        GlBackendRuntime.requireBackend(this.contextGeneration, "GlTexture");
+        GlBackend backend = GlBackendRuntime.requireBackend(this.contextGeneration, "GlTexture");
         for (int lvl = 0; lvl < this.levels; lvl++) {
-            GlBackendRuntime.requireBackend(this.contextGeneration, "GlTexture").clearTextureImage(
-                    this.id, lvl, clearType);
+            backend.clearTextureImage(this.id, lvl, clearType);
         }
         return this;
     }
