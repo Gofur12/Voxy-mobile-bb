@@ -59,8 +59,35 @@ public class Capabilities {
     public final boolean hasBrokenDepthSampler;
 
     public Capabilities() {
-        GlBackendRuntime.requireBackend();
+        var backend = GlBackendRuntime.requireBackend();
         this.contextGeneration = GlBackendRuntime.getContextGeneration();
+
+        // Embedded providers already report version/extension capabilities
+        // through the backend-neutral contract. Do not initialize LWJGL's
+        // desktop GLCapabilities for an EGL/GLES context.
+        var backendCapabilities = backend.capabilities();
+        if (backendCapabilities.embeddedProfile) {
+            this.sparseBuffer = backendCapabilities.bufferStorage;
+            this.compute = backendCapabilities.computeShaders;
+            this.indirectParameters = backendCapabilities.indirectParameters;
+            this.repFragTest = false;
+            this.meshShaders = false;
+            this.canQueryGpuMemory = false;
+            this.INT64_t = backendCapabilities.shaderInt64;
+            this.subgroup = backendCapabilities.subgroupOperations;
+            this.ssboMaxSize = -1L;
+            this.ssboBindingAlignment = -1;
+            this.isMesa = false;
+            this.isIntel = false;
+            this.isNvidia = false;
+            this.isAmd = false;
+            this.totalDedicatedMemory = -1L;
+            this.totalDynamicMemory = -1L;
+            this.nvBarryCoords = false;
+            this.hasBrokenDepthSampler = false;
+            return;
+        }
+
         var cap = GL.getCapabilities();
         this.sparseBuffer = cap.GL_ARB_sparse_buffer;
         this.compute = cap.glDispatchComputeIndirect != 0;
