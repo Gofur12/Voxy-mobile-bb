@@ -25,6 +25,13 @@ switch (voxyTarget) {
             modmenu_version: "7.2.2",
             lithium_version: "mc1.20.1-0.11.3-fabric",
             "runtime.iris_version": "1.7.6+1.20.1",
+            // Optional integrations below are pinned to modern Minecraft releases
+            // in gradle.properties. Do not leak those jars into the 1.20.1 Loom
+            // remapping classpath; add target-compatible versions explicitly later.
+            chunky_version: null,
+            vivecraft_version: null,
+            flashback_version: null,
+            nvidium_version: null,
             target_java_version: "17"
         ])
         break
