@@ -4,6 +4,7 @@ import me.cortex.voxy.client.RenderStatistics;
 import me.cortex.voxy.client.TimingStatistics;
 import me.cortex.voxy.client.VoxyClient;
 import me.cortex.voxy.client.core.gl.GlFramebuffer;
+import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
 import me.cortex.voxy.client.core.model.ModelBakerySubsystem;
 import me.cortex.voxy.client.core.rendering.Viewport;
 import me.cortex.voxy.client.core.rendering.hierachical.AsyncNodeManager;
@@ -17,7 +18,7 @@ import me.cortex.voxy.client.core.util.GPUTiming;
 import me.cortex.voxy.common.util.TrackedObject;
 import org.joml.Matrix4f;
 import org.lwjgl.opengl.GL30;
-import org.lwjgl.system.MemoryUtil;
+import org.lwjgl.system.MemoryStack;
 
 import java.util.List;
 import java.util.function.BooleanSupplier;
@@ -69,13 +70,27 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
 
     protected final boolean deferTranslucency;
 
-    private static final int DEPTH_SAMPLER = glGenSamplers();
-    static {
-        glSamplerParameteri(DEPTH_SAMPLER, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glSamplerParameteri(DEPTH_SAMPLER, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    }
+    private final int depthSampler;
+    private final long contextGeneration;
 
     protected AbstractRenderPipeline(RenderProperties properties, AsyncNodeManager nodeManager, NodeCleaner nodeCleaner, HierarchicalOcclusionTraverser traversal, BooleanSupplier frexSupplier, boolean deferTranslucency) {
+        GlBackendRuntime.requireBackend();
+        this.contextGeneration = GlBackendRuntime.getContextGeneration();
+        this.depthSampler = org.lwjgl.opengl.GL33C.glGenSamplers();
+        if (this.depthSampler == 0) {
+            throw new IllegalStateException("Unable to create depth sampler");
+        }
+        try {
+            org.lwjgl.opengl.GL33C.glSamplerParameteri(this.depthSampler, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            org.lwjgl.opengl.GL33C.glSamplerParameteri(this.depthSampler, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        } catch (RuntimeException | Error failure) {
+            try {
+                org.lwjgl.opengl.GL33C.glDeleteSamplers(this.depthSampler);
+            } catch (RuntimeException | Error cleanupFailure) {
+                failure.addSuppressed(cleanupFailure);
+            }
+            throw failure;
+        }
         this.properties = properties;
         this.frexStillHasWork = frexSupplier;
         this.nodeManager = nodeManager;
@@ -162,7 +177,7 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
 
         this.depthStencilSetup.bind();
         glBindTextureUnit(0, sourceDepthTexture);
-        glBindSampler(0, DEPTH_SAMPLER);
+        glBindSampler(0, this.depthSampler);
         glUniform2f(1,((float)width)/srcWidth, ((float)height)/srcHeight);
         glDepthMask(true);
         glColorMask(false,false,false,false);
@@ -177,7 +192,6 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
         glStencilFunc(GL_EQUAL, 1, 0xFF);
     }
 
-    private static final long SCRATCH = MemoryUtil.nmemAlloc(4*4*4);
     protected static void transformBlitDepth(FullscreenBlit blitShader, int srcDepthTex, int dstFB, Viewport<?> viewport, Matrix4f targetTransform) {
         // at this point the dst frame buffer doesn't have a stencil attachment so we don't need to keep the stencil test on for the blit
         // in the worst case the dstFB does have a stencil attachment causing this pass to become 'corrupted'
@@ -186,10 +200,16 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
 
         blitShader.bind();
         glBindTextureUnit(0, srcDepthTex);
-        new Matrix4f(viewport.MVP).invert().getToAddress(SCRATCH);
-        nglUniformMatrix4fv(1, 1, false, SCRATCH);//inverse fromProjection
-        targetTransform.getToAddress(SCRATCH);//new Matrix4f(tooProjection).mul(vp.modelView).get(data);
-        nglUniformMatrix4fv(2, 1, false, SCRATCH);//tooProjection
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            var scratch = stack.mallocFloat(16);
+            new Matrix4f(viewport.MVP).invert().get(scratch);
+            scratch.flip();
+            org.lwjgl.opengl.GL20C.glUniformMatrix4fv(1, false, scratch);//inverse fromProjection
+            scratch.clear();
+            targetTransform.get(scratch);//new Matrix4f(tooProjection).mul(vp.modelView).get(data);
+            scratch.flip();
+            org.lwjgl.opengl.GL20C.glUniformMatrix4fv(2, false, scratch);//tooProjection
+        }
 
         glEnable(GL_DEPTH_TEST);
         blitShader.blit();
@@ -233,6 +253,9 @@ public abstract class AbstractRenderPipeline extends TrackedObject {
         this.fb.free();
         this.sectionRenderer.free();
         this.depthStencilSetup.delete();
+        if (GlBackendRuntime.isContextGenerationCurrent(this.contextGeneration)) {
+            org.lwjgl.opengl.GL33C.glDeleteSamplers(this.depthSampler);
+        }
         super.free0();
     }
 
