@@ -52,6 +52,7 @@ public class GlTexture extends TrackedObject {
         }
 
         long estimatedSize = this.estimateSize(format, levels, width, height);
+        long updatedEstimatedTotal = Math.addExact(ESTIMATED_TOTAL_SIZE, estimatedSize);
         GlBackendRuntime.requireBackend().allocateTexture2D(this.id, levels, format, width, height);
 
         // Publish wrapper state only after backend allocation succeeds.
@@ -60,7 +61,7 @@ public class GlTexture extends TrackedObject {
         this.height = height;
         this.levels = levels;
         this.hasAllocated = true;
-        ESTIMATED_TOTAL_SIZE = Math.addExact(ESTIMATED_TOTAL_SIZE, estimatedSize);
+        ESTIMATED_TOTAL_SIZE = updatedEstimatedTotal;
         return this;
     }
 
