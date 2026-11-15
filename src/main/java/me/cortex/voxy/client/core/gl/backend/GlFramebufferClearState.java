@@ -10,7 +10,8 @@ package me.cortex.voxy.client.core.gl.backend;
 public final class GlFramebufferClearState {
     private final int drawFramebuffer;
     private final int readFramebuffer;
-    private final int drawBuffer;
+    private final int[] drawBuffers;
+    private final int readBuffer;
     private final boolean scissorEnabled;
     private final int scissorX;
     private final int scissorY;
@@ -27,7 +28,8 @@ public final class GlFramebufferClearState {
     public GlFramebufferClearState(
             int drawFramebuffer,
             int readFramebuffer,
-            int drawBuffer,
+            int[] drawBuffers,
+            int readBuffer,
             boolean scissorEnabled,
             int scissorX,
             int scissorY,
@@ -45,7 +47,11 @@ public final class GlFramebufferClearState {
         }
         this.drawFramebuffer = drawFramebuffer;
         this.readFramebuffer = readFramebuffer;
-        this.drawBuffer = drawBuffer;
+        if (drawBuffers == null || drawBuffers.length == 0) {
+            throw new IllegalArgumentException("At least one draw buffer selection is required");
+        }
+        this.drawBuffers = drawBuffers.clone();
+        this.readBuffer = readBuffer;
         this.scissorEnabled = scissorEnabled;
         this.scissorX = scissorX;
         this.scissorY = scissorY;
@@ -62,7 +68,8 @@ public final class GlFramebufferClearState {
 
     public int drawFramebuffer() { return this.drawFramebuffer; }
     public int readFramebuffer() { return this.readFramebuffer; }
-    public int drawBuffer() { return this.drawBuffer; }
+    public int[] drawBuffers() { return this.drawBuffers.clone(); }
+    public int readBuffer() { return this.readBuffer; }
     public boolean scissorEnabled() { return this.scissorEnabled; }
     public int scissorX() { return this.scissorX; }
     public int scissorY() { return this.scissorY; }
