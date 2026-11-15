@@ -27,7 +27,10 @@ if (voxyTarget == "1.20.1") {
                         "me/cortex/voxy/client/core/model/ModelStore.java",
                         "me/cortex/voxy/client/core/gl/shader/ShaderLoader.java",
                         "me/cortex/voxy/client/core/rendering/ViewportSelector.java",
-                        "me/cortex/voxy/client/DebugEntries.java"
+                        "me/cortex/voxy/client/DebugEntries.java",
+                        "me/cortex/voxy/client/VoxyClientInstance.java",
+                        "me/cortex/voxy/client/mixin/sodium/AccessorSodiumWorldRenderer.java",
+                        "me/cortex/voxy/client/mixin/sodium/MixinSodiumWorldRenderer.java"
                     ].contains(element.path)
                     def modernConfigOnly = [
                         "me/cortex/voxy/client/config/SodiumConfigBuilder.java",
