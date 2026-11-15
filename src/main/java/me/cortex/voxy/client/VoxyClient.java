@@ -59,7 +59,7 @@ public class VoxyClient implements ClientModInitializer {
 
         if (systemSupported) {
 
-            SharedIndexBuffer.INSTANCE.id();
+            SharedIndexBuffer.initialize();
 
             VoxyCommon.setInstanceFactory(VoxyClientInstance::new);
 
@@ -81,6 +81,14 @@ public class VoxyClient implements ClientModInitializer {
         } catch (RuntimeException failure) {
             shutdownFailure = failure;
             Logger.error("Failed to shut down Voxy instance before graphics teardown", failure);
+        }
+
+        try {
+            SharedIndexBuffer.shutdown();
+        } catch (RuntimeException failure) {
+            if (shutdownFailure != null) shutdownFailure.addSuppressed(failure);
+            else shutdownFailure = failure;
+            Logger.error("Failed to release shared index buffers", failure);
         }
 
         Capabilities.clear();
