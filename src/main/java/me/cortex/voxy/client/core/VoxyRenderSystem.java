@@ -588,7 +588,7 @@ public class VoxyRenderSystem {
 
     public void shutdown() {
         Logger.info("Flushing download stream");
-        DownloadStream.INSTANCE.flushWaitClear();
+        DownloadStream.requireInstance().flushWaitClear();
         Logger.info("Shutting down rendering");
         try {
             //Cleanup callbacks
@@ -624,7 +624,7 @@ public class VoxyRenderSystem {
 
 
         Logger.info("Flushing download stream");
-        DownloadStream.INSTANCE.flushWaitClear();
+        DownloadStream.requireInstance().flushWaitClear();
 
         //Release hold on the world
         this.worldIn.releaseRef();
