@@ -30,6 +30,8 @@ public class UploadStream {
     private final long cpuStagingAddress;
     private final long capacity;
     private final boolean persistentMapping;
+    private final long contextGeneration;
+    private boolean closed;
 
     private final Deque<UploadFrame> frames = new ArrayDeque<>();
     private final LongArrayList thisFrameAllocations = new LongArrayList();
@@ -42,7 +44,9 @@ public class UploadStream {
             throw new IllegalArgumentException("Upload stream size must be between 1 and Integer.MAX_VALUE");
         }
         this.capacity = size;
-        var capabilities = GlBackendRuntime.requireBackend().capabilities();
+        var backend = GlBackendRuntime.requireBackend();
+        this.contextGeneration = GlBackendRuntime.getContextGeneration();
+        var capabilities = backend.capabilities();
         this.persistentMapping = capabilities.bufferStorage && capabilities.persistentMapping;
         if (this.persistentMapping) {
             this.uploadBuffer = new GlPersistentMappedBuffer(size, GL_CLIENT_STORAGE_BIT | GL_MAP_WRITE_BIT
@@ -57,6 +61,11 @@ public class UploadStream {
             }
         }
         this.allocationArena.setLimit(size);
+    }
+
+    private void requireCurrentContext() {
+        if (this.closed) throw new IllegalStateException("UploadStream has been shut down");
+        GlBackendRuntime.requireBackend(this.contextGeneration, "UploadStream");
     }
 
     private long caddr = -1;
@@ -99,6 +108,7 @@ public class UploadStream {
     }
 
     public long rawUploadAddress(int size) {
+        this.requireCurrentContext();
         if (size < 0) {
             throw new IllegalStateException("Negative size");
         }
@@ -122,14 +132,14 @@ public class UploadStream {
         long addr;
         if (this.caddr == -1 || !this.allocationArena.expand(this.caddr, size)) {
             if ((!USE_COHERENT) && this.caddr != -1) {
-                GlBackendRuntime.requireBackend().flushMappedBufferRange(this.uploadBuffer.id, this.caddr, this.offset);
+                GlBackendRuntime.requireBackend(this.contextGeneration, "UploadStream").flushMappedBufferRange(this.uploadBuffer.id, this.caddr, this.offset);
             }
             this.caddr = this.allocationArena.alloc(size);
             if (this.caddr == SIZE_LIMIT) {
                 Logger.error("Upload stream full, preemptively waiting for old upload frames");
                 int attempts = 10;
                 while (--attempts != 0 && this.caddr == SIZE_LIMIT) {
-                    GlBackendRuntime.requireBackend().finish();
+                    GlBackendRuntime.requireBackend(this.contextGeneration, "UploadStream").finish();
                     this.tick(false);
                     this.caddr = this.allocationArena.alloc(size);
                 }
@@ -152,9 +162,10 @@ public class UploadStream {
     }
 
     public void commit() {
+        this.requireCurrentContext();
         if (!this.persistentMapping) {
             for (var entry : this.uploadList) {
-                GlBackendRuntime.requireBackend().uploadBuffer(entry.target.id, entry.targetOffset,
+                GlBackendRuntime.requireBackend(this.contextGeneration, "UploadStream").uploadBuffer(entry.target.id, entry.targetOffset,
                         entry.size, this.cpuStagingAddress + entry.uploadOffset);
             }
             this.uploadList.clear();
@@ -172,9 +183,9 @@ public class UploadStream {
         if (this.uploadList.isEmpty()) {
             return;
         }
-        GlBackendRuntime.requireBackend().memoryBarrier(0x00000200); // GL_BUFFER_UPDATE_BARRIER_BIT
+        GlBackendRuntime.requireBackend(this.contextGeneration, "UploadStream").memoryBarrier(0x00000200); // GL_BUFFER_UPDATE_BARRIER_BIT
         for (var entry : this.uploadList) {
-            GlBackendRuntime.requireBackend().copyBufferSubData(this.uploadBuffer.id, entry.target.id,
+            GlBackendRuntime.requireBackend(this.contextGeneration, "UploadStream").copyBufferSubData(this.uploadBuffer.id, entry.target.id,
                     entry.uploadOffset, entry.targetOffset, entry.size);
         }
         this.uploadList.clear();
@@ -209,6 +220,7 @@ public class UploadStream {
     }
 
     public long getBaseAddress() {
+        this.requireCurrentContext();
         if (!this.persistentMapping) {
             throw new UnsupportedOperationException("CPU staging mode has no GPU-mapped base buffer");
         }
@@ -216,6 +228,7 @@ public class UploadStream {
     }
 
     public int getRawBufferId() {
+        this.requireCurrentContext();
         if (!this.persistentMapping) {
             throw new UnsupportedOperationException("CPU staging mode has no GPU upload buffer object");
         }
@@ -225,9 +238,80 @@ public class UploadStream {
     private record UploadFrame(GlFence fence, LongArrayList allocations) {}
     private record UploadData(GlBuffer target, long uploadOffset, long targetOffset, long size) {}
 
-    // A single upload instance instead of passing one around by reference.
-    // MUST ONLY BE USED ON THE RENDER THREAD.
-    public static final UploadStream INSTANCE = new UploadStream(1 << 26);
+    // Created only after the graphics backend is active; never allocate GPU state at class load.
+    public static volatile UploadStream INSTANCE;
+
+    public static synchronized UploadStream initialize() {
+        GlBackendRuntime.requireBackend();
+        long generation = GlBackendRuntime.getContextGeneration();
+        if (INSTANCE != null && INSTANCE.contextGeneration == generation && !INSTANCE.closed) return INSTANCE;
+        UploadStream previous = INSTANCE;
+        INSTANCE = null;
+        if (previous != null) previous.closeResources();
+        UploadStream created = new UploadStream(1 << 26);
+        INSTANCE = created;
+        return created;
+    }
+
+    public static UploadStream requireInstance() {
+        UploadStream stream = INSTANCE;
+        if (stream == null) throw new IllegalStateException("UploadStream has not been initialized for the active graphics context");
+        stream.requireCurrentContext();
+        return stream;
+    }
+
+    public static synchronized void shutdown() {
+        UploadStream previous = INSTANCE;
+        INSTANCE = null;
+        if (previous != null) previous.closeResources();
+    }
+
+    private void closeResources() {
+        if (this.closed) return;
+        this.closed = true;
+        Throwable failure = null;
+        boolean contextCurrent = GlBackendRuntime.isContextGenerationCurrent(this.contextGeneration);
+        if (contextCurrent) {
+            try { this.commitForShutdown(); } catch (RuntimeException | Error e) { failure = appendFailure(failure, e); }
+            try { GlBackendRuntime.requireBackend(this.contextGeneration, "UploadStream").finish(); } catch (RuntimeException | Error e) { failure = appendFailure(failure, e); }
+        }
+        while (!this.frames.isEmpty()) {
+            try { this.frames.removeFirst().fence.free(); } catch (RuntimeException | Error e) { failure = appendFailure(failure, e); }
+        }
+        this.thisFrameAllocations.clear();
+        this.uploadList.clear();
+        this.caddr = -1;
+        this.offset = 0;
+        if (this.uploadBuffer != null) {
+            try { this.uploadBuffer.free(); } catch (RuntimeException | Error e) { failure = appendFailure(failure, e); }
+        }
+        if (this.cpuStagingAddress != 0L) MemoryUtil.nmemFree(this.cpuStagingAddress);
+        rethrowFailure(failure);
+    }
+
+    private void commitForShutdown() {
+        if (!this.persistentMapping) {
+            for (var entry : this.uploadList) GlBackendRuntime.requireBackend(this.contextGeneration, "UploadStream").uploadBuffer(entry.target.id, entry.targetOffset, entry.size, this.cpuStagingAddress + entry.uploadOffset);
+            return;
+        }
+        if (!USE_COHERENT && this.caddr != -1) GlBackendRuntime.requireBackend(this.contextGeneration, "UploadStream").flushMappedBufferRange(this.uploadBuffer.id, this.caddr, this.offset);
+        if (!this.uploadList.isEmpty()) {
+            GlBackendRuntime.requireBackend(this.contextGeneration, "UploadStream").memoryBarrier(0x00000200);
+            for (var entry : this.uploadList) GlBackendRuntime.requireBackend(this.contextGeneration, "UploadStream").copyBufferSubData(this.uploadBuffer.id, entry.target.id, entry.uploadOffset, entry.targetOffset, entry.size);
+            GlBackendRuntime.requireBackend(this.contextGeneration, "UploadStream").memoryBarrier(0x00000200);
+        }
+    }
+
+    private static Throwable appendFailure(Throwable first, Throwable next) {
+        if (first == null) return next;
+        if (first != next) first.addSuppressed(next);
+        return first;
+    }
+
+    private static void rethrowFailure(Throwable failure) {
+        if (failure instanceof RuntimeException e) throw e;
+        if (failure instanceof Error e) throw e;
+    }
 
     public static long alignUp(long val, long alignment) {
         return ((val + alignment - 1) / alignment) * alignment;
