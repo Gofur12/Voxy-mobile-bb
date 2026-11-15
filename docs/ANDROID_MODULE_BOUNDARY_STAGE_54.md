@@ -99,3 +99,22 @@ A MobileGlues-specific bridge may be needed if the launcher does not expose a st
 ## Verification limits
 
 This stage changes documentation only. It does not create a dummy Android module or add unbuildable Android plugin configuration. No Gradle build, unit tests, Minecraft launch, launcher integration test, or Android device test was run.
+
+
+## Backend provider SPI added after the initial boundary audit
+
+The initialization seam is now implemented in source:
+
+- `GlBackendProviders` discovers optional providers with Java `ServiceLoader`.
+- An external provider can register through `META-INF/services/me.cortex.voxy.client.core.gl.backend.GlBackendProvider`.
+- Discovered non-desktop providers are ordered before the built-in desktop fallback.
+- Duplicate IDs are ignored, and the built-in desktop provider is always appended last.
+- `VoxyClient.initVoxyClient()` now calls `GlBackendRuntime.initialize(GlBackendProviders.discover())` instead of directly constructing `DesktopGlBackendProvider`.
+
+This makes the backend selection extensible without importing Android classes into the Fabric source set. It does not implement GLES, create an EGL context, or prove compatibility with MobileGlues/Zink/Kopper.
+
+Source commits:
+- `01b5f672b4bf34dc3122edb7cee22a9c7172ffe7` — use discovered providers in the Fabric client initializer.
+- `cd1b30f1fc4fa1280eda11fc31a825100bf4d452` — add the ServiceLoader provider registry.
+
+The original acceptance checklist remains accurate: the Android module and device tests are still not complete.
