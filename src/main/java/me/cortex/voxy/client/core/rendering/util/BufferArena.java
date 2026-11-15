@@ -43,7 +43,7 @@ public class BufferArena {
         if (addr == -1) {
             return -1;
         }
-        long uploadPtr = UploadStream.INSTANCE.upload(this.buffer, addr * this.elementSize, buffer.size);
+        long uploadPtr = UploadStream.requireInstance().upload(this.buffer, addr * this.elementSize, buffer.size);
         UnsafeUtil.memcpy(buffer.address, uploadPtr, buffer.size);
         this.used += size;
         return addr;
