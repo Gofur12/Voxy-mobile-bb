@@ -28,4 +28,4 @@ jobs:
           cache-read-only: ${{ github.event_name == 'pull_request' }}
 
       - name: Build Fabric 1.20.1 target
-        run: sh ./gradlew -PvoxyTarget=1.20.1 build
+        run: sh ./gradlew -PvoxyTarget=1.20.1 build --stacktrace
