@@ -37,11 +37,22 @@ public class GlBuffer extends TrackedObject {
     }
 
     private GlBuffer(long size, int flags, boolean zero, long data) {
+        if (size <= 0) throw new IllegalArgumentException("Buffer size must be positive");
         this.flags = flags;
         this.size = size;
-        this.id = GlBackendRuntime.requireBackend().createBuffer(size, data, flags);
-        if ((flags&GL_SPARSE_STORAGE_BIT_ARB)==0 && zero) {
-            this.zero();
+        GlBackend backend = GlBackendRuntime.requireBackend();
+        this.id = backend.createBuffer(size, data, flags);
+        try {
+            if ((flags & GL_SPARSE_STORAGE_BIT_ARB) == 0 && zero) {
+                this.zero();
+            }
+        } catch (RuntimeException | Error initializationFailure) {
+            try {
+                backend.deleteBuffer(this.id);
+            } catch (RuntimeException | Error cleanupFailure) {
+                if (initializationFailure != cleanupFailure) initializationFailure.addSuppressed(cleanupFailure);
+            }
+            throw initializationFailure;
         }
 
         COUNT++;
@@ -51,14 +62,16 @@ public class GlBuffer extends TrackedObject {
     @Override
     public void free() {
         this.free0();
-        GlBackendRuntime.requireBackend().deleteBuffer(this.id);
-
-        COUNT--;
-        TOTAL_SIZE -= this.size;
+        try {
+            GlBackendRuntime.requireBackend().deleteBuffer(this.id);
+        } finally {
+            COUNT--;
+            TOTAL_SIZE -= this.size;
+        }
     }
 
     public boolean isSparse() {
-        return (this.flags&GL_SPARSE_STORAGE_BIT_ARB)!=0;
+        return (this.flags & GL_SPARSE_STORAGE_BIT_ARB) != 0;
     }
 
     public long size() {
