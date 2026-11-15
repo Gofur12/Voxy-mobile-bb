@@ -101,6 +101,18 @@ public interface GlBackend extends AutoCloseable {
                           int minLevel, int levelCount, int minLayer, int layerCount);
 
     /**
+     * Returns whether this backend can clear the supplied semantic texture format.
+     *
+     * The default is deliberately conservative: a backend must opt in only when
+     * it can perform the clear correctly for the active API/context. This lets
+     * embedded implementations reject unsupported formats before any mip level
+     * is modified.
+     */
+    default boolean supportsTextureClear(GlTextureClearType clearType) {
+        return false;
+    }
+
+    /**
      * Clears one 2D texture mip level to numeric zero using a format-aware semantic clear type.
      *
      * Implementations must preserve all caller-visible graphics state changed by the operation.
