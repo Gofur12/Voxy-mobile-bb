@@ -7,8 +7,10 @@ import static org.lwjgl.opengl.GL30.GL_FRAMEBUFFER_COMPLETE;
 
 public class GlFramebuffer extends TrackedObject {
     public final int id;
+    private final long contextGeneration;
     public GlFramebuffer() {
-        this.id = GlBackendRuntime.requireBackend().createFramebuffer();
+        this.id = GlBackendRuntime.requireBackend(this.contextGeneration, "GlFramebuffer").createFramebuffer();
+        this.contextGeneration = GlBackendRuntime.getContextGeneration();
     }
 
     public GlFramebuffer bind(int attachment, GlTexture texture) {
