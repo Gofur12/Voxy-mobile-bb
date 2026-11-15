@@ -30,6 +30,7 @@ public class HiZBuffer2 {
             .define("OUTPUT_COLOUR")
             .compile();
     private final GlFramebuffer fb = new GlFramebuffer().name("HiZ");
+    private final GlVertexArray emptyVao;
     private final int sampler = glGenSamplers();
     private final int type;
     private GlTexture texture;
@@ -41,6 +42,7 @@ public class HiZBuffer2 {
         this(GL_R32F);
     }
     public HiZBuffer2(int type) {
+        this.emptyVao = new GlVertexArray();
         glNamedFramebufferDrawBuffer(this.fb.id, GL_COLOR_ATTACHMENT0);
         this.type = type;
     }
@@ -84,7 +86,7 @@ public class HiZBuffer2 {
         {//Mip down to initial chain
             int boundFB = GL11.glGetInteger(GL_DRAW_FRAMEBUFFER_BINDING);
 
-            glBindVertexArray(GlVertexArray.STATIC_VAO);
+            this.emptyVao.bind();
             this.hizInitial.bind();
             glBindFramebuffer(GL_FRAMEBUFFER, this.fb.id);
 
@@ -129,8 +131,8 @@ public class HiZBuffer2 {
     }
 
     public void free() {
-        this.fb.free();
-        if (this.texture != null) {
+        this.emptyVao.free();
+        this.fb.free();        if (this.texture != null) {
             this.texture.free();
             this.texture = null;
         }
