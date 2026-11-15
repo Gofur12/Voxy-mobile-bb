@@ -26,13 +26,16 @@ public class RawDownloadStream {
     private final GlPersistentMappedBuffer persistentBuffer;
     private final GlBuffer cpuReadbackBuffer;
     private final boolean persistentMapping;
+    private final long contextGeneration;
+    private boolean closed;
     private final AllocationArena allocationArena = new AllocationArena();
     private final ArrayList<DownloadFragment> frameFragments = new ArrayList<>();
     private final Deque<DownloadFrame> frames = new ArrayDeque<>();
 
     public RawDownloadStream(int size) {
         if (size <= 0) throw new IllegalArgumentException("Raw download stream size must be positive");
-        GlBackend backend = GlBackendRuntime.requireBackend();
+        GlBackend backend = GlBackendRuntime.requireBackend(this.contextGeneration, "RawDownloadStream");
+        this.contextGeneration = GlBackendRuntime.getContextGeneration();
         var capabilities = backend.capabilities();
         this.persistentMapping = capabilities.bufferStorage && capabilities.persistentMapping;
         if (this.persistentMapping) {
@@ -45,14 +48,20 @@ public class RawDownloadStream {
         this.allocationArena.setLimit(size);
     }
 
+    private void requireCurrentContext() {
+        if (this.closed) throw new IllegalStateException("RawDownloadStream has been freed");
+        GlBackendRuntime.requireBackend(this.contextGeneration, "RawDownloadStream");
+    }
+
     public int download(int size, IDownloadCompletedCallback callback) {
+        this.requireCurrentContext();
         if (size <= 0) throw new IllegalArgumentException("Download size must be positive");
         if (callback == null) throw new NullPointerException("callback");
         int allocation = (int) this.allocationArena.alloc(size);
         if (allocation == AllocationArena.SIZE_LIMIT) {
             Logger.warn("Raw download stream full; waiting for submitted download frames");
             this.submit();
-            GlBackendRuntime.requireBackend().finish();
+            GlBackendRuntime.requireBackend(this.contextGeneration, "RawDownloadStream").finish();
             this.tick();
             allocation = (int) this.allocationArena.alloc(size);
             if (allocation == AllocationArena.SIZE_LIMIT) {
@@ -65,6 +74,7 @@ public class RawDownloadStream {
 
     // Submits the current group and fences writes issued by the caller.
     public void submit() {
+        this.requireCurrentContext();
         if (!this.frameFragments.isEmpty()) {
             DownloadFragment[] fragments = this.frameFragments.toArray(new DownloadFragment[0]);
             this.frameFragments.clear();
@@ -73,6 +83,7 @@ public class RawDownloadStream {
     }
 
     public void tick() {
+        this.requireCurrentContext();
         this.submit();
         GlBackend backend = GlBackendRuntime.requireBackend();
         Throwable failure = null;
@@ -159,32 +170,59 @@ public class RawDownloadStream {
     }
 
     public int getBufferId() {
+        this.requireCurrentContext();
         return this.persistentMapping ? this.persistentBuffer.id : this.cpuReadbackBuffer.id;
     }
 
     public void free() {
-        this.submit();
-        GlBackend backend = GlBackendRuntime.requireBackend();
-        backend.finish();
+        if (this.closed) return;
         Throwable failure = null;
-        try {
-            this.tick();
-        } catch (RuntimeException | Error callbackFailure) {
-            failure = callbackFailure;
-        }
-        if (!this.frames.isEmpty()) {
-            failure = appendFailure(failure,
-                    new IllegalStateException("Raw download frames remain after GPU finish"));
-        } else {
+        boolean contextCurrent = GlBackendRuntime.isContextGenerationCurrent(this.contextGeneration);
+        if (contextCurrent) {
             try {
-                if (this.persistentMapping) {
-                    this.persistentBuffer.free();
-                } else {
-                    this.cpuReadbackBuffer.free();
-                }
+                this.submit();
+                GlBackendRuntime.requireBackend(this.contextGeneration, "RawDownloadStream").finish();
+                this.tick();
+            } catch (RuntimeException | Error callbackOrFlushFailure) {
+                failure = appendFailure(failure, callbackOrFlushFailure);
+            }
+        }
+
+        this.closed = true;
+        // If the context was lost, callbacks cannot safely consume GPU data.
+        // In either shutdown path, release all arena slots and fence wrappers.
+        for (DownloadFragment fragment : this.frameFragments) {
+            try {
+                this.allocationArena.free(fragment.allocation);
             } catch (RuntimeException | Error cleanupFailure) {
                 failure = appendFailure(failure, cleanupFailure);
             }
+        }
+        this.frameFragments.clear();
+        while (!this.frames.isEmpty()) {
+            DownloadFrame frame = this.frames.removeFirst();
+            for (DownloadFragment fragment : frame.fragments) {
+                try {
+                    this.allocationArena.free(fragment.allocation);
+                } catch (RuntimeException | Error cleanupFailure) {
+                    failure = appendFailure(failure, cleanupFailure);
+                }
+            }
+            try {
+                frame.fence.free();
+            } catch (RuntimeException | Error cleanupFailure) {
+                failure = appendFailure(failure, cleanupFailure);
+            }
+        }
+
+        try {
+            if (this.persistentMapping) {
+                this.persistentBuffer.free();
+            } else {
+                this.cpuReadbackBuffer.free();
+            }
+        } catch (RuntimeException | Error cleanupFailure) {
+            failure = appendFailure(failure, cleanupFailure);
         }
         rethrowFailure(failure);
     }
