@@ -25,8 +25,8 @@ public class BufferArena {
         if (capacity%elementSize != 0) {
             throw new IllegalArgumentException("Capacity not a multiple of element size");
         }
-        if (CHECK_SSBO_MAX_SIZE_CHECK && capacity > Capabilities.INSTANCE.ssboMaxSize) {
-            throw new IllegalArgumentException("Buffer is bigger than max ssbo size (requested " + capacity + " but has max of " + Capabilities.INSTANCE.ssboMaxSize+")");
+        if (CHECK_SSBO_MAX_SIZE_CHECK && capacity > Capabilities.require().ssboMaxSize) {
+            throw new IllegalArgumentException("Buffer is bigger than max ssbo size (requested " + capacity + " but has max of " + Capabilities.require().ssboMaxSize+")");
         }
         this.size = capacity;
         this.elementSize = elementSize;
