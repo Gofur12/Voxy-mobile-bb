@@ -11,15 +11,29 @@ plugins {
 def voxyTarget = providers.gradleProperty("voxyTarget").getOrElse("26.3")
 apply plugin: (voxyTarget == "1.20.1" ? "net.fabricmc.fabric-loom-remap" : "net.fabricmc.fabric-loom")
 
-// Sodium's modern config API is absent from the 1.20.1 Sodium 0.5.13 profile.
-// Keep those optional UI adapters out of the legacy compile instead of stubbing Sodium APIs.
+// Keep the modern 26.3 implementation as the default source tree. The 1.20.1
+// profile adds narrowly scoped source replacements for Minecraft API renames.
 if (voxyTarget == "1.20.1") {
     sourceSets {
         main {
             java {
-                exclude "me/cortex/voxy/client/config/SodiumConfigBuilder.java"
-                exclude "me/cortex/voxy/client/config/VoxyConfigMenu.java"
-                exclude "me/cortex/voxy/client/config/ModMenuIntegration.java"
+                srcDir "src/1.20.1/java"
+                exclude { element ->
+                    def mainSourceRoot = file("src/main/java").toPath().toAbsolutePath().normalize()
+                    def candidate = element.file.toPath().toAbsolutePath().normalize()
+                    def isMainTree = candidate.startsWith(mainSourceRoot)
+                    def replacedByLegacySource = [
+                        "me/cortex/voxy/commonImpl/WorldIdentifier.java",
+                        "me/cortex/voxy/client/core/model/ModelStore.java",
+                        "me/cortex/voxy/client/core/gl/shader/ShaderLoader.java"
+                    ].contains(element.path)
+                    def modernConfigOnly = [
+                        "me/cortex/voxy/client/config/SodiumConfigBuilder.java",
+                        "me/cortex/voxy/client/config/VoxyConfigMenu.java",
+                        "me/cortex/voxy/client/config/ModMenuIntegration.java"
+                    ].contains(element.path)
+                    return isMainTree && (replacedByLegacySource || modernConfigOnly)
+                }
             }
         }
     }
