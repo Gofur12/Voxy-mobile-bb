@@ -21,18 +21,21 @@ public class GlVertexArray extends TrackedObject {
     private int stride;
 
     public GlVertexArray() {
-        this.id = GlBackendRuntime.requireBackend(this.contextGeneration, "GlVertexArray").createVertexArray();
+        var backend = GlBackendRuntime.requireBackend();
+        this.id = backend.createVertexArray();
         this.contextGeneration = GlBackendRuntime.getContextGeneration();
     }
 
     @Override
     public void free() {
         super.free0();
-        GlBackendRuntime.requireBackend().deleteVertexArray(this.id);
+        if (GlBackendRuntime.isContextGenerationCurrent(this.contextGeneration)) {
+            GlBackendRuntime.requireBackend(this.contextGeneration, "GlVertexArray").deleteVertexArray(this.id);
+        }
     }
 
     public void bind() {
-        GlBackendRuntime.requireBackend().bindVertexArray(this.id);
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlVertexArray").bindVertexArray(this.id);
     }
 
     public GlVertexArray bindBuffer(int buffer) {
