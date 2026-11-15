@@ -164,6 +164,7 @@ public class Shader extends TrackedObject {
                         .collect(Collectors.joining());
                 for (var entry : this.sources.entrySet()) {
                     String src = entry.getValue();
+                    validateShaderVersion(backend.capabilities(), entry.getKey(), src);
                     int firstLineEnd = src.indexOf('\n');
                     if (firstLineEnd < 0) throw new IllegalArgumentException("Shader source must start with a version line");
                     src = src.substring(0, firstLineEnd + 1) + defs + src.substring(firstLineEnd + 1);
@@ -202,6 +203,37 @@ public class Shader extends TrackedObject {
             this.defineIf("IS_INTEL", Capabilities.INSTANCE.isIntel);
             this.defineIf("IS_WINDOWS", ThreadUtils.isWindows);
             return this.constructor.make(this, this.compileToProgram());
+        }
+
+        private static void validateShaderVersion(GlCapabilities capabilities, ShaderType type, String source) {
+            int lineEnd = source.indexOf('\\n');
+            String versionLine = lineEnd < 0 ? source : source.substring(0, lineEnd);
+            java.util.regex.Matcher matcher = java.util.regex.Pattern
+                    .compile("#version\\\\s+(\\\\d+)(?:\\\\s+(core|compatibility|es))?")
+                    .matcher(versionLine.trim());
+            if (!matcher.matches()) {
+                throw new IllegalArgumentException("Invalid or missing GLSL version directive for " + type
+                        + ": " + versionLine);
+            }
+
+            int requestedVersion = Integer.parseInt(matcher.group(1));
+            int requestedMajor = requestedVersion / 100;
+            int requestedMinor = (requestedVersion % 100) / 10;
+            String profile = matcher.group(2);
+            boolean requestsEs = "es".equals(profile);
+
+            if (capabilities.embeddedProfile != requestsEs) {
+                throw new IllegalStateException("Shader profile mismatch for " + type + ": source requests "
+                        + (requestsEs ? "GLSL ES " : "desktop GLSL ") + requestedVersion
+                        + " but backend '" + GlBackendRuntime.requireBackend().name() + "' exposes "
+                        + (capabilities.embeddedProfile ? "an embedded" : "a desktop") + " GL profile");
+            }
+            if (requestedMajor > capabilities.majorVersion
+                    || (requestedMajor == capabilities.majorVersion && requestedMinor > capabilities.minorVersion)) {
+                throw new IllegalStateException("Shader " + type + " requires GLSL " + requestedVersion
+                        + " but backend '" + GlBackendRuntime.requireBackend().name() + "' exposes GL "
+                        + capabilities.majorVersion + "." + capabilities.minorVersion);
+            }
         }
 
         private static void printProgramLinkLog(GlBackend backend, int program) {
