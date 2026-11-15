@@ -34,7 +34,7 @@ public class RawDownloadStream {
 
     public RawDownloadStream(int size) {
         if (size <= 0) throw new IllegalArgumentException("Raw download stream size must be positive");
-        GlBackend backend = GlBackendRuntime.requireBackend(this.contextGeneration, "RawDownloadStream");
+        GlBackend backend = GlBackendRuntime.requireBackend();
         this.contextGeneration = GlBackendRuntime.getContextGeneration();
         var capabilities = backend.capabilities();
         this.persistentMapping = capabilities.bufferStorage && capabilities.persistentMapping;
@@ -85,7 +85,7 @@ public class RawDownloadStream {
     public void tick() {
         this.requireCurrentContext();
         this.submit();
-        GlBackend backend = GlBackendRuntime.requireBackend();
+        GlBackend backend = GlBackendRuntime.requireBackend(this.contextGeneration, "RawDownloadStream");
         Throwable failure = null;
         while (!this.frames.isEmpty()) {
             DownloadFrame frame = this.frames.peekFirst();
