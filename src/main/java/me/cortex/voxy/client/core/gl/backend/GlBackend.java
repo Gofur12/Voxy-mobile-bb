@@ -100,7 +100,8 @@ public interface GlBackend extends AutoCloseable {
     int createTextureView(int source, int target, int internalFormat,
                           int minLevel, int levelCount, int minLayer, int layerCount);
 
-    void clearTextureImage(int handle, int level, int format, int type, long dataAddress);
+    /** Clears one texture mip level to zero using a format-aware semantic clear type. */
+    void clearTextureImage(int handle, int level, GlTextureClearType clearType);
 
     void allocateTexture2D(int handle, int levels, int internalFormat, int width, int height);
 
