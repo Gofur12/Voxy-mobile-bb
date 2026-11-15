@@ -2,7 +2,6 @@ package me.cortex.voxy.common.voxelization;
 
 import it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap;
 import me.cortex.voxy.common.world.other.Mapper;
-import net.caffeinemc.mods.lithium.common.world.chunk.LithiumHashPalette;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.core.Holder;
 import net.minecraft.util.SimpleBitStorage;
@@ -14,8 +13,6 @@ import net.minecraft.world.level.chunk.*;
 import java.util.WeakHashMap;
 
 public class WorldConversionFactory {
-    private static final boolean LITHIUM_INSTALLED = FabricLoader.getInstance().isModLoaded("lithium");
-
     private static final class Cache {
         private final int[] biomeCache = new int[4*4*4];
         private final WeakHashMap<Mapper, Reference2IntOpenHashMap<BlockState>> localMapping = new WeakHashMap<>();
@@ -35,25 +32,9 @@ public class WorldConversionFactory {
     //TODO: create a mapping for world/mapper -> local mapping
     private static final ThreadLocal<Cache> THREAD_LOCAL = ThreadLocal.withInitial(Cache::new);
 
-    private static boolean setupLithiumLocalPallet(Palette<BlockState> vp, Reference2IntOpenHashMap<BlockState> blockCache, Mapper mapper, int[] pc)  {
-        if (vp instanceof LithiumHashPalette<BlockState>) {
-            for (int i = 0; i < vp.getSize(); i++) {
-                BlockState state = null;
-                int blockId = -1;
-                try { state = vp.valueFor(i); } catch (Exception e) {}
-                if (state != null) {
-                    blockId = blockCache.getOrDefault(state, -1);
-                    if (blockId == -1) {
-                        blockId = mapper.getIdForBlockState(state);
-                        blockCache.put(state, blockId);
-                    }
-                }
-                pc[i] = blockId;
-            }
-            return true;
-        }
-        return false;
-    }
+    // Keep palette conversion independent from Lithium's version-specific internals.
+    // Unknown palette implementations still expose valueFor(), so the generic path
+    // preserves correctness without linking against a private Lithium class.
     private static int setupLocalPalette(Palette<BlockState> vp, Reference2IntOpenHashMap<BlockState> blockCache, Mapper mapper, int[] pc) {
         int c = vp.getSize();
         if (vp instanceof LinearPalette<BlockState>) {
@@ -99,8 +80,20 @@ public class WorldConversionFactory {
             }
             pc[0] = blockId;
         } else {
-            if (!(LITHIUM_INSTALLED && setupLithiumLocalPallet(vp, blockCache, mapper, pc))) {
-                throw new IllegalStateException("Unknown palette type: " + vp);
+            // Fallback for palettes supplied by optional optimization mods (e.g. Lithium).
+            // Avoid a hard compile-time dependency on their private implementation classes.
+            for (int i = 0; i < vp.getSize(); i++) {
+                BlockState state = null;
+                int blockId = -1;
+                try { state = vp.valueFor(i); } catch (Exception ignored) {}
+                if (state != null) {
+                    blockId = blockCache.getOrDefault(state, -1);
+                    if (blockId == -1) {
+                        blockId = mapper.getIdForBlockState(state);
+                        blockCache.put(state, blockId);
+                    }
+                }
+                pc[i] = blockId;
             }
         }
         return c;
