@@ -34,6 +34,7 @@ public class DebugRenderer {
             .compile();
 
     private final GlBuffer uniformBuffer = new GlBuffer(1024).zero();
+    private final GlVertexArray emptyVao = new GlVertexArray();
     private final GlBuffer drawBuffer = new GlBuffer(1024).zero();
 
     private void uploadUniform(Viewport<?> viewport) {
@@ -67,7 +68,7 @@ public class DebugRenderer {
 
         glEnable(GL_DEPTH_TEST);
         this.debugShader.bind();
-        glBindVertexArray(GlVertexArray.STATIC_VAO);
+        this.emptyVao.bind();
         glBindBuffer(GL_DRAW_INDIRECT_BUFFER, this.drawBuffer.id);
         GL15.glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, SharedIndexBuffer.INSTANCE_BYTE.id());
         glBindBufferBase(GL_UNIFORM_BUFFER, 0, this.uniformBuffer.id);
@@ -77,6 +78,7 @@ public class DebugRenderer {
     }
 
     public void free() {
+        this.emptyVao.free();
         this.drawBuffer.free();
         this.uniformBuffer.free();
         this.debugShader.free();
