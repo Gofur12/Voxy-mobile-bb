@@ -41,7 +41,11 @@ if (voxyTarget == "1.20.1") {
                         "me/cortex/voxy/client/core/RenderProperties.java",
                         "me/cortex/voxy/client/core/util/IrisUtil.java",
                         "me/cortex/voxy/client/mixin/sodium/MixinDefaultChunkRenderer.java",
-                        "me/cortex/voxy/client/mixin/sodium/MixinRenderSectionManager.java"
+                        "me/cortex/voxy/client/mixin/sodium/MixinRenderSectionManager.java",
+                        "me/cortex/voxy/client/mixin/minecraft/MixinClientChunkCache.java",
+                        "me/cortex/voxy/client/mixin/minecraft/MixinClientLevel.java",
+                        "me/cortex/voxy/client/mixin/minecraft/MixinRenderSystem.java",
+                        "me/cortex/voxy/client/mixin/minecraft/session/MixinMinecraft.java"
                     ].contains(element.path)
                     def modernConfigOnly = [
                         "me/cortex/voxy/client/config/SodiumConfigBuilder.java",
@@ -59,7 +63,12 @@ if (voxyTarget == "1.20.1") {
                         "me/cortex/voxy/client/mixin/iris/MixinLevelRenderer.java",
                         "me/cortex/voxy/client/mixin/iris/MixinIrisRenderingPipeline.java",
                         "me/cortex/voxy/client/mixin/sodium/MixinFallbackVisibleChunkCollector.java",
-                        "me/cortex/voxy/client/mixin/sodium/MixinRenderRegionManager.java"
+                        "me/cortex/voxy/client/mixin/sodium/MixinRenderRegionManager.java",
+                        // Targets that do not exist on 1.20.1 (LevelExtractor, client.renderer.fog,
+                        // ClientCommonPacketListenerImpl are all post-1.20.1 classes).
+                        "me/cortex/voxy/client/mixin/minecraft/MixinLevelExtractor.java",
+                        "me/cortex/voxy/client/mixin/minecraft/MixinFogRenderer.java",
+                        "me/cortex/voxy/client/mixin/minecraft/util/MixinClientCommonPacketListenerImpl.java"
                     ].contains(element.path)
                     return isMainTree && (replacedByLegacySource || modernConfigOnly || optionalModernIntegration)
                 }
@@ -417,6 +426,10 @@ tasks.withType(JavaCompile).configureEach {
     it.options.encoding = "UTF-8"
     it.options.release = targetJavaVersion
     it.options.deprecation = true
+    if (voxyTarget == "1.20.1") {
+        // javac stops at 100 errors by default, which hides most of the port work in CI logs.
+        it.options.compilerArgs.addAll(["-Xmaxerrs", "5000", "-Xmaxwarns", "5000"])
+    }
 }
 
 java {
