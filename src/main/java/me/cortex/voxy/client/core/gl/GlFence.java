@@ -5,15 +5,17 @@ import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
 
 public class GlFence extends TrackedObject {
     private final long fence;
+    private final long contextGeneration;
     private boolean signaled;
 
     public GlFence() {
         this.fence = GlBackendRuntime.requireBackend().createFence();
+        this.contextGeneration = GlBackendRuntime.getContextGeneration();
     }
 
     public boolean signaled() {
         if (!this.signaled) {
-            this.signaled = GlBackendRuntime.requireBackend().isFenceSignaled(this.fence);
+            this.signaled = GlBackendRuntime.requireBackend(this.contextGeneration, "GlFence").isFenceSignaled(this.fence);
         }
         return this.signaled;
     }
@@ -21,6 +23,8 @@ public class GlFence extends TrackedObject {
     @Override
     public void free() {
         super.free0();
-        GlBackendRuntime.requireBackend().deleteFence(this.fence);
+        if (GlBackendRuntime.isContextGenerationCurrent(this.contextGeneration)) {
+            GlBackendRuntime.requireBackend(this.contextGeneration, "GlFence").deleteFence(this.fence);
+        }
     }
 }
