@@ -36,7 +36,8 @@ if (voxyTarget == "1.20.1") {
                         "me/cortex/voxy/client/mixin/sodium/MixinVisibleChunkCollector.java",
                         "me/cortex/voxy/client/core/RenderProperties.java",
                         "me/cortex/voxy/client/core/util/IrisUtil.java",
-                        "me/cortex/voxy/client/mixin/sodium/MixinDefaultChunkRenderer.java"
+                        "me/cortex/voxy/client/mixin/sodium/MixinDefaultChunkRenderer.java",
+                        "me/cortex/voxy/client/mixin/sodium/MixinRenderSectionManager.java"
                     ].contains(element.path)
                     def modernConfigOnly = [
                         "me/cortex/voxy/client/config/SodiumConfigBuilder.java",
@@ -52,7 +53,9 @@ if (voxyTarget == "1.20.1") {
                         "me/cortex/voxy/client/mixin/flashback/MixinFlashbackRecorder.java",
                         "me/cortex/voxy/commonImpl/mixin/chunky/MixinFabricWorld.java",
                         "me/cortex/voxy/client/mixin/iris/MixinLevelRenderer.java",
-                        "me/cortex/voxy/client/mixin/iris/MixinIrisRenderingPipeline.java"
+                        "me/cortex/voxy/client/mixin/iris/MixinIrisRenderingPipeline.java",
+                        "me/cortex/voxy/client/mixin/sodium/MixinFallbackVisibleChunkCollector.java",
+                        "me/cortex/voxy/client/mixin/sodium/MixinRenderRegionManager.java"
                     ].contains(element.path)
                     return isMainTree && (replacedByLegacySource || modernConfigOnly || optionalModernIntegration)
                 }
