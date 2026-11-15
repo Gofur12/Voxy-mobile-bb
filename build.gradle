@@ -213,7 +213,7 @@ if (!isInGHA) {
     }
 }
 
-def smartDependency(String property, boolean runtime = false, String maven = null, boolean compile = true) {
+def smartDependency = { String property, boolean runtime = false, String maven = null, boolean compile = true ->
     String ver;
     if (voxyProfile.containsKey("runtime."+property) || project.hasProperty("runtime."+property)) {
         ver = voxyProfile.containsKey("runtime."+property) ? voxyProfile["runtime."+property] : project["runtime."+property];
