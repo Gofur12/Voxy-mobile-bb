@@ -1,7 +1,6 @@
 package me.cortex.voxy.client.core.rendering;
 
 import me.cortex.voxy.client.core.util.IrisUtil;
-import net.fabricmc.loader.api.FabricLoader;
 
 import java.util.HashMap;
 import java.util.Map;
