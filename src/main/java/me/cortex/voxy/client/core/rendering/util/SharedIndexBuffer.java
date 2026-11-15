@@ -133,10 +133,10 @@ public class SharedIndexBuffer {
             quadIndexBuff = generateQuadIndicesByte(63);
             cubeBuff = generateCubeIndexBuffer();
 
-            long ptr = UploadStream.INSTANCE.upload(this.indexBuffer, 0, this.indexBuffer.size());
+            long ptr = UploadStream.requireInstance().upload(this.indexBuffer, 0, this.indexBuffer.size());
             quadIndexBuff.cpyTo(ptr);
             cubeBuff.cpyTo((1<<8)*6 + ptr);
-            UploadStream.INSTANCE.commit();
+            UploadStream.requireInstance().commit();
         } catch (RuntimeException | Error failure) {
             cleanupConstructionFailure(quadIndexBuff, cubeBuff, failure);
             try {
@@ -156,8 +156,8 @@ public class SharedIndexBuffer {
         MemoryBuffer cubeBuff = null;
         try {
             cubeBuff = generateByteCubesIndexBuffer(256/8);
-            cubeBuff.cpyTo(UploadStream.INSTANCE.upload(this.indexBuffer, 0, this.indexBuffer.size()));
-            UploadStream.INSTANCE.commit();
+            cubeBuff.cpyTo(UploadStream.requireInstance().upload(this.indexBuffer, 0, this.indexBuffer.size()));
+            UploadStream.requireInstance().commit();
         } catch (RuntimeException | Error failure) {
             cleanupConstructionFailure(cubeBuff, null, failure);
             try {
