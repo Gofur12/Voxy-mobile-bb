@@ -3,6 +3,7 @@ package me.cortex.voxy.client.core.gl;
 import me.cortex.voxy.common.util.TrackedObject;
 import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
 import me.cortex.voxy.client.core.gl.backend.GlBackend;
+import me.cortex.voxy.client.core.gl.backend.GlTextureClearType;
 
 import static org.lwjgl.opengl.GL11.GL_RGBA8;
 import static org.lwjgl.opengl.GL11C.*;
