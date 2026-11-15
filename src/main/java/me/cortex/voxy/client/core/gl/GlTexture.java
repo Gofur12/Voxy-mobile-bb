@@ -2,6 +2,7 @@ package me.cortex.voxy.client.core.gl;
 
 import me.cortex.voxy.common.util.TrackedObject;
 import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
+import me.cortex.voxy.client.core.gl.backend.GlBackend;
 
 import static org.lwjgl.opengl.GL11.GL_RGBA8;
 import static org.lwjgl.opengl.GL11C.*;
@@ -160,6 +161,31 @@ public class GlTexture extends TrackedObject {
         if (!this.hasAllocated) {
             throw new IllegalStateException("Texture not yet allocated");
         }
+    }
+
+    /**
+     * Uploads a rectangular client-memory pixel region into one allocated mip level.
+     * The caller owns the native memory and must keep it valid for the duration of this call.
+     */
+    public GlTexture upload2D(int level, int x, int y, int uploadWidth, int uploadHeight,
+                              int format, int type, long dataAddress) {
+        this.assertAllocated();
+        this.assertContextCurrent();
+        if (this.type != GL_TEXTURE_2D) {
+            throw new IllegalStateException("Only 2D texture uploads are supported by this wrapper");
+        }
+        if (level < 0 || level >= this.levels || x < 0 || y < 0
+                || uploadWidth <= 0 || uploadHeight <= 0 || dataAddress == 0L) {
+            throw new IllegalArgumentException("Invalid texture upload region");
+        }
+        int levelWidth = Math.max(this.width >> level, 1);
+        int levelHeight = Math.max(this.height >> level, 1);
+        if (x > levelWidth - uploadWidth || y > levelHeight - uploadHeight) {
+            throw new IllegalArgumentException("Texture upload region exceeds mip level bounds");
+        }
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlTexture").uploadTexture2D(
+                this.id, level, x, y, uploadWidth, uploadHeight, format, type, dataAddress);
+        return this;
     }
 
     public GlTexture zero() {
