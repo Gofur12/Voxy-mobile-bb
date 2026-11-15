@@ -19,26 +19,32 @@ import net.minecraft.world.level.storage.LevelResource;
 import java.nio.file.Path;
 
 public class VoxyClientInstance extends VoxyInstance {
-    private final Config config;
-    private final Path basePath;
-    private final boolean noIngestOverride;
+    private Config config;
+    private Path basePath;
+    private boolean noIngestOverride;
 
     public VoxyClientInstance() {
-        {
-            var path = FlashbackCompat.getReplayStoragePath();
-            this.noIngestOverride = path != null;
-            if (path == null) {
-                path = getBasePath();
-            }
-            var basePath = this.basePath = path.normalize();
-            this.config = StorageConfigUtil.getCreateStorageConfig(Config.class, c->c.version==1&&c.sectionStorageConfig!=null, ()->DEFAULT_STORAGE_CONFIG, basePath);
-        }
         super();
         this.updateDedicatedThreads();
     }
 
+    // Java 17 has no statements-before-super(). VoxyInstance's constructor calls
+    // shouldCreateInstance() first, so these fields are populated lazily from there.
+    // They intentionally have no initializers (an initializer would reset them after super()).
+    private void ensureInitialised() {
+        if (this.config != null) return;
+        var path = FlashbackCompat.getReplayStoragePath();
+        this.noIngestOverride = path != null;
+        if (path == null) {
+            path = getBasePath();
+        }
+        var base = this.basePath = path.normalize();
+        this.config = StorageConfigUtil.getCreateStorageConfig(Config.class, c->c.version==1&&c.sectionStorageConfig!=null, ()->DEFAULT_STORAGE_CONFIG, base);
+    }
+
     @Override
     protected boolean shouldCreateInstance() {
+        this.ensureInitialised();
         return !this.config.disabled;
     }
 
@@ -108,17 +114,17 @@ public class VoxyClientInstance extends VoxyInstance {
         if (iserver != null) {
             basePath = iserver.getWorldPath(LevelResource.ROOT).resolve("voxy");
         } else {
-            var netHandle = Minecraft.getInstance().gameMode;
-            if (netHandle == null) {
+            var mc = Minecraft.getInstance();
+            if (mc.gameMode == null) {
                 Logger.error("Network handle null");
                 basePath = basePath.resolve("UNKNOWN");
             } else {
-                var info = netHandle.connection.getServerData();
+                var info = mc.getCurrentServer();
                 if (info == null) {
                     Logger.error("Server info null");
                     basePath = basePath.resolve("UNKNOWN");
                 } else {
-                    if (info.isRealm()) {
+                    if (mc.isConnectedToRealms()) {
                         basePath = basePath.resolve("realms");
                     } else {
                         basePath = basePath.resolve(info.ip.replace(":", "_"));

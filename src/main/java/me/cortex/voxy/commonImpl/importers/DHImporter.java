@@ -339,8 +339,8 @@ public class DHImporter implements IDataImporter {
         byte[] col = ctx.colScratch;
         for (int x = 0; x < 64; x++) {
             for (int z = 0; z < 64; z++) {
-                int bPos = Integer.expand(x&0xF, 0b00_00_0000_0000_1111) |
-                           Integer.expand(z, 0b00_11_0000_1111_0000);
+                int bPos = expand(x&0xF, 0b00_00_0000_0000_1111) |
+                           expand(z, 0b00_11_0000_1111_0000);
                 short cl = stream.readShort();
                 if (cl < 0) {
                     throw new IllegalStateException();
@@ -356,8 +356,8 @@ public class DHImporter implements IDataImporter {
                     //    int a = 0;
                     //}
                     //Insert all entries into data cache
-                    startY = Integer.expand(startY, 0b11111111_00_1111_0000_0000);
-                    endY = Integer.expand(endY, 0b11111111_00_1111_0000_0000);
+                    startY = expand(startY, 0b11111111_00_1111_0000_0000);
+                    endY = expand(endY, 0b11111111_00_1111_0000_0000);
                     final int Msk = 0b11111111_00_1111_0000_0000;
                     final int iMsk1 = (~Msk)+1;
                     for (int y = startY; y != endY; y = (y+iMsk1)&Msk) {
@@ -468,4 +468,15 @@ public class DHImporter implements IDataImporter {
         HasRequiredLibraries = hasJDBC;
     }
 
+
+    /** Software equivalent of Integer.expand (JDK 19+): deposits the low bits of i at the set bits of mask. */
+    private static int expand(int i, int mask) {
+        int result = 0;
+        for (int bit = 1; mask != 0; bit <<= 1) {
+            int lowest = mask & -mask;
+            if ((i & bit) != 0) result |= lowest;
+            mask &= mask - 1;
+        }
+        return result;
+    }
 }
