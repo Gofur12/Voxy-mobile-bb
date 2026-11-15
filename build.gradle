@@ -163,7 +163,8 @@ processResources {
     var hash = gitCommitHash()
     var version = project.version
 
-    def props = ["version": version, "commit": hash, "buildtime": time, "allowed_sodium_versions": sodium_versions, "allowed_mc_version": allowed_mc_version]
+    def access_widener = voxyTarget == "1.20.1" ? "voxy-1.20.1.accesswidener" : "voxy.accesswidener"
+    def props = ["version": version, "commit": hash, "buildtime": time, "allowed_sodium_versions": sodium_versions, "allowed_mc_version": allowed_mc_version, "access_widener": access_widener]
 
     for (var prop : props) {
         String value = prop.value;
