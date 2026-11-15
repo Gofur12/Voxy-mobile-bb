@@ -403,6 +403,8 @@ dependencies {
     // GLSL Transformer 3.0.0-pre3 is built for Java 21+, while the 1.20.1
     // profile targets Java 17. Keep the older Java-17-compatible API on that target.
     compileOnly("io.github.douira:glsl-transformer:${voxyTarget == "1.20.1" ? "2.0.1" : "3.0.0-pre3"}")
+    // Minecraft 1.20.1 does not expose JSpecify annotations on its compile classpath.
+    compileOnly("org.jspecify:jspecify:1.0.0")
 }
 
 
