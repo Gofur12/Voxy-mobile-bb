@@ -29,6 +29,8 @@ public class DownloadStream {
     private final AllocationArena allocationArena = new AllocationArena();
     private final GlPersistentMappedBuffer downloadBuffer;
     private final boolean persistentMapping;
+    private final long contextGeneration;
+    private boolean closed;
     private final Deque<CpuDownload> cpuDownloads = new ArrayDeque<>();
 
     private final Deque<DownloadFrame> frames = new ArrayDeque<>();
@@ -40,7 +42,9 @@ public class DownloadStream {
         if (size <= 0 || size > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("Download stream size must be between 1 and Integer.MAX_VALUE");
         }
-        var capabilities = GlBackendRuntime.requireBackend().capabilities();
+        var backend = GlBackendRuntime.requireBackend();
+        this.contextGeneration = GlBackendRuntime.getContextGeneration();
+        var capabilities = backend.capabilities();
         this.persistentMapping = capabilities.bufferStorage && capabilities.persistentMapping;
         if (this.persistentMapping) {
             this.downloadBuffer = new GlPersistentMappedBuffer(size, GL_MAP_READ_BIT);
@@ -48,6 +52,11 @@ public class DownloadStream {
             this.downloadBuffer = null;
         }
         this.allocationArena.setLimit(size);
+    }
+
+    private void requireCurrentContext() {
+        if (this.closed) throw new IllegalStateException("DownloadStream has been shut down");
+        GlBackendRuntime.requireBackend(this.contextGeneration, "DownloadStream");
     }
 
     private long caddr = -1;
@@ -69,6 +78,7 @@ public class DownloadStream {
     }
 
     public void download(GlBuffer buffer, long downloadOffset, long size, DownloadResultConsumer resultConsumer) {
+        this.requireCurrentContext();
         if (size > Integer.MAX_VALUE || size <= 0 || downloadOffset < 0
                 || downloadOffset > buffer.size() || size > buffer.size() - downloadOffset) {
             throw new IllegalArgumentException("Invalid download range");
@@ -87,7 +97,7 @@ public class DownloadStream {
                 this.commit();
                 int attempts = 10;
                 while (--attempts != 0 && this.caddr == SIZE_LIMIT) {
-                    GlBackendRuntime.requireBackend().finish();
+                    GlBackendRuntime.requireBackend(this.contextGeneration, "DownloadStream").finish();
                     this.tick();
                     this.caddr = this.allocationArena.alloc((int) size);
                 }
@@ -154,15 +164,16 @@ public class DownloadStream {
     }
 
     public void commit() {
+        this.requireCurrentContext();
         if (!this.persistentMapping) {
             return;
         }
         if (this.downloadList.isEmpty()) {
             return;
         }
-        GlBackendRuntime.requireBackend().memoryBarrier(BUFFER_UPDATE_BARRIER_BIT);
+        GlBackendRuntime.requireBackend(this.contextGeneration, "DownloadStream").memoryBarrier(BUFFER_UPDATE_BARRIER_BIT);
         for (var entry : this.downloadList) {
-            GlBackendRuntime.requireBackend().copyBufferSubData(entry.target.id, this.downloadBuffer.id, entry.targetOffset, entry.downloadStreamOffset, entry.size);
+            GlBackendRuntime.requireBackend(this.contextGeneration, "DownloadStream").copyBufferSubData(entry.target.id, this.downloadBuffer.id, entry.targetOffset, entry.downloadStreamOffset, entry.size);
         }
         GlBackendRuntime.requireBackend().memoryBarrier(CLIENT_MAPPED_BUFFER_BARRIER_BIT | BUFFER_UPDATE_BARRIER_BIT);
         this.thisFrameDownloadList.addAll(this.downloadList);
@@ -172,6 +183,7 @@ public class DownloadStream {
     }
 
     public void tick() {
+        this.requireCurrentContext();
         if (!this.persistentMapping) {
             Throwable failure = null;
             while (!this.cpuDownloads.isEmpty()) {
@@ -223,6 +235,7 @@ public class DownloadStream {
 
     // Synchronous fallback has already completed its GPU readback by this point.
     public void waitDiscard() {
+        this.requireCurrentContext();
         if (!this.persistentMapping) {
             while (!this.cpuDownloads.isEmpty()) {
                 MemoryUtil.nmemFree(this.cpuDownloads.removeFirst().address);
@@ -280,6 +293,7 @@ public class DownloadStream {
     }
 
     public void flushWaitClear() {
+        this.requireCurrentContext();
         if (!this.persistentMapping) {
             this.tick();
             if (!this.cpuDownloads.isEmpty()) {
@@ -306,6 +320,59 @@ public class DownloadStream {
     private record DownloadFrame(GlFence fence, LongArrayList allocations, ArrayList<DownloadData> data) {}
     private record DownloadData(GlBuffer target, long downloadStreamOffset, long targetOffset, long size, DownloadResultConsumer resultConsumer) {}
 
+    // Created only after the graphics backend is active.
+    public static volatile DownloadStream INSTANCE;
+
+    public static synchronized DownloadStream initialize() {
+        GlBackendRuntime.requireBackend();
+        long generation = GlBackendRuntime.getContextGeneration();
+        if (INSTANCE != null && INSTANCE.contextGeneration == generation && !INSTANCE.closed) return INSTANCE;
+        DownloadStream previous = INSTANCE;
+        INSTANCE = null;
+        if (previous != null) previous.closeResources();
+        DownloadStream created = new DownloadStream(1 << 25);
+        INSTANCE = created;
+        return created;
+    }
+
+    public static DownloadStream requireInstance() {
+        DownloadStream stream = INSTANCE;
+        if (stream == null) throw new IllegalStateException("DownloadStream has not been initialized for the active graphics context");
+        stream.requireCurrentContext();
+        return stream;
+    }
+
+    public static synchronized void shutdown() {
+        DownloadStream previous = INSTANCE;
+        INSTANCE = null;
+        if (previous != null) previous.closeResources();
+    }
+
+    private void closeResources() {
+        if (this.closed) return;
+        Throwable failure = null;
+        boolean contextCurrent = GlBackendRuntime.isContextGenerationCurrent(this.contextGeneration);
+        if (contextCurrent) {
+            try { this.flushWaitClear(); } catch (RuntimeException | Error flushFailure) { failure = appendFailure(failure, flushFailure); }
+            try { GlBackendRuntime.requireBackend(this.contextGeneration, "DownloadStream").finish(); }
+            catch (RuntimeException | Error finishFailure) { failure = appendFailure(failure, finishFailure); }
+        }
+        this.closed = true;
+        while (!this.cpuDownloads.isEmpty()) MemoryUtil.nmemFree(this.cpuDownloads.removeFirst().address);
+        this.downloadList.clear();
+        this.thisFrameDownloadList.clear();
+        this.thisFrameAllocations.clear();
+        this.caddr = -1;
+        this.offset = 0;
+        while (!this.frames.isEmpty()) {
+            DownloadFrame frame = this.frames.removeFirst();
+            try { frame.fence.free(); } catch (RuntimeException | Error fenceFailure) { failure = appendFailure(failure, fenceFailure); }
+        }
+        if (this.downloadBuffer != null) {
+            try { this.downloadBuffer.free(); } catch (RuntimeException | Error bufferFailure) { failure = appendFailure(failure, bufferFailure); }
+        }
+        rethrowFailure(failure);
+    }
+
     // Global download stream
-    public static final DownloadStream INSTANCE = new DownloadStream(1<<25);//32 mb download buffer
 }
