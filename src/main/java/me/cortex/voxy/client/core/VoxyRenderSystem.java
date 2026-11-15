@@ -369,7 +369,7 @@ public class VoxyRenderSystem {
         //As much dynamic runtime stuff here
         {
             //Tick upload stream (this is ok to do here as upload ticking is just memory management)
-            UploadStream.INSTANCE.tick();
+            UploadStream.requireInstance().tick();
 
             while (this.renderDistanceTracker.setCenterAndProcess(viewport.cameraX, viewport.cameraZ) && VoxyClient.isFrexActive());//While FF is active, run until everything is processed
             TimingStatistics.H.start();
@@ -550,7 +550,7 @@ public class VoxyRenderSystem {
             return false;
         }
         //If frex is running we must tick everything to ensure correctness
-        UploadStream.INSTANCE.tick();
+        UploadStream.requireInstance().tick();
         //Done here as is allows less gl state resetup
         this.modelService.tick(100_000_000);
         GL11.glFinish();
