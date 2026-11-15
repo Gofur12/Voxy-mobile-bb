@@ -8,6 +8,7 @@ import com.mojang.renderpearl.api.device.GpuDebugOptions;
 import com.mojang.renderpearl.api.device.GpuDevice;
 import com.mojang.renderpearl.backend.vulkan.VulkanBackend;
 import me.cortex.voxy.client.ClientSessionEvents;
+import me.cortex.voxy.client.VoxyClient;
 import net.minecraft.client.Minecraft;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -30,5 +31,17 @@ public class MixinMinecraft {
         if (ClientSessionEvents.inSession) {
             ClientSessionEvents.sessionEnd();
         }
+    }
+
+    /**
+     * Minecraft closes its window/context after this method begins. Release
+     * Voxy resources first, while the graphics context is still current.
+     */
+    @Inject(method = "close", at = @At("HEAD"))
+    private void voxy$shutdownGraphicsResources(CallbackInfo ci) {
+        if (ClientSessionEvents.inSession) {
+            ClientSessionEvents.sessionEnd();
+        }
+        VoxyClient.shutdownGraphicsResources();
     }
 }
