@@ -21,19 +21,39 @@ public class SaveLoadSystem3 {
             this.lutMapCache.defaultReturnValue((short) -1);
         }
     }
+    private static int expandBits(int value, int mask) {
+        int result = 0;
+        for (int sourceBit = 1; mask != 0; sourceBit <<= 1) {
+            int targetBit = mask & -mask;
+            if ((value & sourceBit) != 0) result |= targetBit;
+            mask &= mask - 1;
+        }
+        return result;
+    }
+
+    private static int compressBits(int value, int mask) {
+        int result = 0;
+        for (int targetBit = 1; mask != 0; targetBit <<= 1) {
+            int sourceBit = mask & -mask;
+            if ((value & sourceBit) != 0) result |= targetBit;
+            mask &= mask - 1;
+        }
+        return result;
+    }
+
     public static int lin2z(int i) {//y,z,x
         int x = i&0x1F;
         int y = (i>>10)&0x1F;
         int z = (i>>5)&0x1F;
-        return Integer.expand(x,0b1001001001001)|Integer.expand(y,0b10010010010010)|Integer.expand(z,0b100100100100100);
+        return expandBits(x,0b1001001001001)|expandBits(y,0b10010010010010)|expandBits(z,0b100100100100100);
 
         //zyxzyxzyxzyxzyx
     }
 
     public static int z2lin(int i) {
-        int x = Integer.compress(i, 0b1001001001001);
-        int y = Integer.compress(i, 0b10010010010010);
-        int z = Integer.compress(i, 0b100100100100100);
+        int x = compressBits(i, 0b1001001001001);
+        int y = compressBits(i, 0b10010010010010);
+        int z = compressBits(i, 0b100100100100100);
         return x|(y<<10)|(z<<5);
     }
 
