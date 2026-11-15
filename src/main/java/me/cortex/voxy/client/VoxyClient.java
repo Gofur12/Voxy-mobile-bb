@@ -6,6 +6,7 @@ import me.cortex.voxy.client.core.gl.backend.desktop.DesktopGlBackendProvider;
 import me.cortex.voxy.client.core.rendering.util.SharedIndexBuffer;
 import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.commonImpl.VoxyCommon;
+import me.cortex.voxy.commonImpl.VoxyInstance;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.loader.api.FabricLoader;
@@ -67,6 +68,34 @@ public class VoxyClient implements ClientModInitializer {
                 Logger.warn("GPU does not support subgroup operations, expect some performance degradation");
             }
 
+        }
+    }
+
+    /**
+     * Releases Voxy's world instance and backend while Minecraft still owns
+     * the graphics context. Called from the client shutdown hook.
+     */
+    public static void shutdownGraphicsResources() {
+        RuntimeException shutdownFailure = null;
+        try {
+            VoxyCommon.shutdownInstance();
+        } catch (RuntimeException failure) {
+            shutdownFailure = failure;
+            Logger.error("Failed to shut down Voxy instance before graphics teardown", failure);
+        }
+
+        if (GlBackendRuntime.isInitialized()) {
+            try {
+                GlBackendRuntime.shutdown();
+            } catch (RuntimeException failure) {
+                if (shutdownFailure != null) shutdownFailure.addSuppressed(failure);
+                else shutdownFailure = failure;
+                Logger.error("Failed to shut down Voxy graphics backend", failure);
+            }
+        }
+
+        if (shutdownFailure != null) {
+            Logger.error("Voxy graphics shutdown completed with errors");
         }
     }
 
