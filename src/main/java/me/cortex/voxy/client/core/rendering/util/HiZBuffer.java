@@ -24,6 +24,7 @@ import static org.lwjgl.opengl.GL45C.glTextureBarrier;
 public class HiZBuffer {
     private final Shader hiz;
     private final GlFramebuffer fb = new GlFramebuffer().name("HiZ");
+    private final GlVertexArray emptyVao;
     private final int sampler = glGenSamplers();
     private final int type;
     private GlTexture texture;
@@ -36,6 +37,7 @@ public class HiZBuffer {
         this(properties, GL_DEPTH24_STENCIL8);
     }
     public HiZBuffer(RenderProperties properties, int type) {
+        this.emptyVao = new GlVertexArray();
         glNamedFramebufferDrawBuffer(this.fb.id, GL_NONE);
         this.type = type;
         this.hiz = Shader.make()
@@ -81,7 +83,7 @@ public class HiZBuffer {
             }
             this.alloc(Integer.highestOneBit(width), Integer.highestOneBit(height));
         }
-        glBindVertexArray(GlVertexArray.STATIC_VAO);
+        this.emptyVao.bind();
         int boundFB = GL11.glGetInteger(GL_DRAW_FRAMEBUFFER_BINDING);
         this.hiz.bind();
         glBindFramebuffer(GL_FRAMEBUFFER, this.fb.id);
@@ -119,6 +121,7 @@ public class HiZBuffer {
     }
 
     public void free() {
+        this.emptyVao.free();
         this.fb.free();
         if (this.texture != null) {
             this.texture.free();
