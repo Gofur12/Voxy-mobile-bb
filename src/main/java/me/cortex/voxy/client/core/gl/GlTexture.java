@@ -203,6 +203,11 @@ public class GlTexture extends TrackedObject {
             default -> throw new IllegalStateException("Unknown texture clear format: " + this.format);
         };
         GlBackend backend = GlBackendRuntime.requireBackend(this.contextGeneration, "GlTexture");
+        if (!backend.supportsTextureClear(clearType)) {
+            throw new UnsupportedOperationException("Active GL backend '" + backend.name()
+                    + "' does not support texture clear type " + clearType
+                    + " for format 0x" + Integer.toHexString(this.format));
+        }
         for (int lvl = 0; lvl < this.levels; lvl++) {
             backend.clearTextureImage(this.id, lvl, clearType);
         }
