@@ -8,8 +8,8 @@ package me.cortex.voxy.client.core.gl.backend;
  */
 public enum GlRendererPath {
     DESKTOP_MDIC,
-    GLES_COMPUTE_LOD,
-    GLES_BASIC_RASTER,
+    GLES_COMPUTE_LOD_CANDIDATE,
+    GLES_BASIC_RASTER_CANDIDATE,
     UNSUPPORTED;
 
     public static GlRendererPath select(GlCapabilities capabilities) {
@@ -20,10 +20,10 @@ public enum GlRendererPath {
             return DESKTOP_MDIC;
         }
         if (capabilities.supportsGlesComputeLodPath()) {
-            return GLES_COMPUTE_LOD;
+            return GLES_COMPUTE_LOD_CANDIDATE;
         }
         if (capabilities.supportsGles3BasicRasterPath()) {
-            return GLES_BASIC_RASTER;
+            return GLES_BASIC_RASTER_CANDIDATE;
         }
         return UNSUPPORTED;
     }
