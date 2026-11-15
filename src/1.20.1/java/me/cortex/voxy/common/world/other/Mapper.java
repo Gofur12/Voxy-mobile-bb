@@ -13,7 +13,6 @@ import net.minecraft.core.Holder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.NbtAccounter;
 import net.minecraft.nbt.NbtIo;
 import net.minecraft.nbt.NbtOps;
 import net.minecraft.util.datafix.DataFixers;
@@ -26,6 +25,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import org.lwjgl.system.MemoryUtil;
 
 import java.io.ByteArrayInputStream;
+import java.io.DataInputStream;
+import java.util.zip.GZIPInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -41,6 +42,12 @@ import java.util.function.Consumer;
 //There are independent mappings for biome and block states, these get combined in the shader and allow for more
 // variaty of things
 public class Mapper {
+    private static CompoundTag readCompressed(byte[] data) throws IOException {
+        try (var input = new DataInputStream(new GZIPInputStream(new ByteArrayInputStream(data)))) {
+            return NbtIo.read(input);
+        }
+    }
+
     private static final int BLOCK_STATE_TYPE = 1;
     private static final int BIOME_TYPE = 2;
 
@@ -386,7 +393,7 @@ public class Mapper {
                 var serialized = new CompoundTag();
                 serialized.putInt("id", this.id);
                 serialized.put("block_state", BlockState.CODEC.encodeStart(NbtOps.INSTANCE, this.state).result().get());
-                serialized.putInt("version", SharedConstants.getCurrentVersion().getDataVersion());
+                serialized.putInt("version", SharedConstants.getCurrentVersion().getDataVersion().getVersion());
                 var out = new ByteArrayOutputStream();
                 NbtIo.writeCompressed(serialized, out);
                 return out.toByteArray();
@@ -395,13 +402,13 @@ public class Mapper {
             }
         }
 
-        private static final int DATA_VERSION = SharedConstants.getCurrentVersion().dataVersion().version();
+        private static final int DATA_VERSION = SharedConstants.getCurrentVersion().getDataVersion().getVersion();
         private static final int MIN_DATA_VERSION = 4671;//Min version is 1.21.11
 
         public static StateEntry deserialize(int id, byte[] data, boolean[] forceResave) {
             try {
-                var compound = NbtIo.readCompressed(new ByteArrayInputStream(data), NbtAccounter.UNLIMITED);
-                if (compound.getIntOr("id", -1) != id) {
+                var compound = readCompressed(data);
+                if (compound.getInt("id") != id) {
                     throw new IllegalStateException("Encoded id != expected id");
                 }
 
@@ -409,7 +416,7 @@ public class Mapper {
                 if (bsc == null) {
                     throw new IllegalStateException("Expected a block state but it was null: " + compound);
                 }
-                int version = compound.getIntOr("version", MIN_DATA_VERSION);
+                int version = compound.contains("version") ? compound.getInt("version") : MIN_DATA_VERSION;
                 if (version != DATA_VERSION) {
                     forceResave[0] |= true;
                     Logger.info("Migrating block from version " + version + " to " + DATA_VERSION);
@@ -422,7 +429,7 @@ public class Mapper {
                     return new StateEntry(id, Blocks.AIR.defaultBlockState());
                 }
                 if (state.isError() && state.hasResultOrPartial()) {
-                    Logger.error("Decode result only had a partial value, using it anyway. id:" + id + " tag:"+bsc + " error: " + state.error().map(DataResult.Error::message));
+                    Logger.error("Decode result only had a partial value, using it anyway. id:" + id + " tag:"+bsc + " error: " + state.error().map(Object::toString));
                     forceResave[0] |= true;
                 }
                 return new StateEntry(id, state.getPartialOrThrow());
@@ -456,11 +463,11 @@ public class Mapper {
 
         public static BiomeEntry deserialize(int id, byte[] data) {
             try {
-                var compound = NbtIo.readCompressed(new ByteArrayInputStream(data), NbtAccounter.unlimitedHeap());
+                var compound = readCompressed(data);
                 if (compound.getIntOr("id", -1) != id) {
                     throw new IllegalStateException("Encoded id != expected id");
                 }
-                String biome = compound.getStringOr("biome_id", null);
+                String biome = compound.getString("biome_id");
                 return new BiomeEntry(id, biome);
             } catch (IOException e) {
                 throw new RuntimeException(e);
