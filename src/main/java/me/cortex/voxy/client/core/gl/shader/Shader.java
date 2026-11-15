@@ -20,25 +20,36 @@ import java.util.stream.Collectors;
 
 public class Shader extends TrackedObject {
     private final int id;
+    private final long contextGeneration;
     Shader(int program) {
         id = program;
+        this.contextGeneration = GlBackendRuntime.getContextGeneration();
     }
 
     public int id() {
         return this.id;
     }
 
+    protected final void assertContextCurrent() {
+        this.assertNotFreed();
+        GlBackendRuntime.requireBackend(this.contextGeneration, "Shader");
+    }
+
     public void bind() {
-        GlBackendRuntime.requireBackend().useProgram(this.id);
+        this.assertContextCurrent();
+        GlBackendRuntime.requireBackend(this.contextGeneration, "Shader").useProgram(this.id);
     }
 
     public void free() {
         super.free0();
-        GlBackendRuntime.requireBackend().deleteProgram(this.id);
+        if (GlBackendRuntime.isContextGenerationCurrent(this.contextGeneration)) {
+            GlBackendRuntime.requireBackend(this.contextGeneration, "Shader").deleteProgram(this.id);
+        }
     }
 
 
     public Shader name(String name) {
+        this.assertContextCurrent();
         return GlDebug.name(name, this);
     }
 
