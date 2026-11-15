@@ -16,11 +16,13 @@ public class GlVertexArray extends TrackedObject {
     public static final int STATIC_VAO = glGenVertexArrays();
 
     public final int id;
+    private final long contextGeneration;
     private int[] indices = new int[0];
     private int stride;
 
     public GlVertexArray() {
-        this.id = GlBackendRuntime.requireBackend().createVertexArray();
+        this.id = GlBackendRuntime.requireBackend(this.contextGeneration, "GlVertexArray").createVertexArray();
+        this.contextGeneration = GlBackendRuntime.getContextGeneration();
     }
 
     @Override
