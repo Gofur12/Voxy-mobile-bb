@@ -47,7 +47,9 @@ if (voxyTarget == "1.20.1") {
                         "me/cortex/voxy/client/mixin/minecraft/MixinRenderSystem.java",
                         "me/cortex/voxy/client/mixin/minecraft/session/MixinMinecraft.java",
                         "me/cortex/voxy/common/Logger.java",
-                        "me/cortex/voxy/client/taskbar/Taskbar.java"
+                        "me/cortex/voxy/client/taskbar/Taskbar.java",
+                        "me/cortex/voxy/commonImpl/importers/WorldImporter.java",
+                        "me/cortex/voxy/commonImpl/importers/DHImporter.java"
                     ].contains(element.path)
                     def modernConfigOnly = [
                         "me/cortex/voxy/client/config/SodiumConfigBuilder.java",

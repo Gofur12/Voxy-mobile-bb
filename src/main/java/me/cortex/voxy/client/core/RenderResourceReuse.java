@@ -80,7 +80,7 @@ public class RenderResourceReuse {
         long generation = requireCurrentGeneration();
         synchronizeCacheGeneration(generation);
         if (!MODEL_TEXTURE_CACHE.isEmpty()) {
-            GlTexture cached = MODEL_TEXTURE_CACHE.removeFirst();
+            GlTexture cached = MODEL_TEXTURE_CACHE.remove(0);
             cached.assertContextCurrent();
             cached.assertAllocated();
             return cached.zero();
@@ -116,7 +116,7 @@ public class RenderResourceReuse {
         long generation = requireCurrentGeneration();
         synchronizeCacheGeneration(generation);
         if (!GEOMETRY_BUFFER_CACHE.isEmpty()) {
-            GlBuffer cached = GEOMETRY_BUFFER_CACHE.removeFirst();
+            GlBuffer cached = GEOMETRY_BUFFER_CACHE.remove(0);
             cached.assertContextCurrent();
             return cached;
         }

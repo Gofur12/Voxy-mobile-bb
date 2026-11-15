@@ -36,3 +36,10 @@ Fixed (Java 17 `--release` / 1.20.1 API drift):
 
 Remaining by size (unique errors): `ModelFactory` 58, `SoftwareModelTextureBakery` 37, `WorldImporter` 23 (26.x NBT Optional API, `PalettedContainerFactory`, `ZipFile.builder`), `ReuseVertexConsumer` 20, `TextureUtils` 20, `DHImporter` 11 (registries, `Identifier`), `RenderDataFactory` 11, Iris classes (`VoxySamplers`, `IrisVoxyRenderPipelineData`, `IrisShaderPatch` Gson `Strictness`, `VoxyUniforms`), `OccupancySet*`, `VoxyRenderSystem`, `LightMapHelper`, `ClientImportManager` (`gui.hud`), `AbstractSectionRenderer`.
 javac may still be hiding attribute-phase errors behind these symbol errors.
+
+## Stage 88c — third CI log (214 errors)
+
+- `WorldImporter` and `DHImporter` now have real 1.20.1 sources in `src/1.20.1` (main copies excluded): `registryOrThrow` / `getHolderOrThrow` / `getHolder` / `getOptional`, `PalettedContainer.codecRO/codecRW` with `SECTION_BIOMES` / `SECTION_STATES` and a real default-biome `PalettedContainer` instead of an anonymous `PalettedContainerRO`, 1.20.1 `CompoundTag` getters guarded with `contains`, `DataFixers.update(...)` returning a `Tag`, `ChunkStatus` from `chunk` (not `chunk.status`), `new ZipFile(File)`, `getMinBuildHeight()`, `ResourceLocation`.
+- Shared JDK 17 fixes: `IntBits.compress/expand` (verified equal to the JDK methods on 1M random cases) used by `OccupancySet`/`OccupancySet2`; `Math.clamp` in `SoftwareRasterizer`; `List.removeFirst/getLast/removeLast` in `RenderResourceReuse`, `TestNodeManager`, `IrisVoxyRenderPipelineData`.
+- Known JDK 21+ calls still present but hidden by earlier errors (visible next run): `ModelFactory` `Math.clamp`, `RenderDataFactory` `Integer.expand`; `Deque.removeFirst` call sites are fine.
+- Not touched: `ModelFactory`, `SoftwareModelTextureBakery`, `ReuseVertexConsumer`, `TextureUtils`, `RenderDataFactory`, `LightMapHelper`, `VoxyRenderSystem`, Iris classes, `ClientImportManager`.
