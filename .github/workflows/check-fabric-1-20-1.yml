@@ -30,6 +30,16 @@ jobs:
       - name: Build Fabric 1.20.1 target
         run: sh ./gradlew -PvoxyTarget=1.20.1 build --info --stacktrace
 
+      - name: Upload Fabric 1.20.1 jar
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: voxy-fabric-1-20-1
+          path: |
+            build/libs/*.jar
+            !build/libs/*-dev.jar
+          if-no-files-found: error
+
       # Loom currently fails while reading an access widener with an unexpected
       # namespace. Scan downloaded mod jars even when the build step fails.
       - name: Diagnose access widener namespaces
@@ -77,3 +87,4 @@ jobs:
                   continue
           print(f"Scanned cached jars; access-widener entries found: {found}")
           PY
+          
