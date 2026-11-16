@@ -72,7 +72,10 @@ if (voxyTarget == "1.20.1") {
                         // ClientCommonPacketListenerImpl are all post-1.20.1 classes).
                         "me/cortex/voxy/client/mixin/minecraft/MixinLevelExtractor.java",
                         "me/cortex/voxy/client/mixin/minecraft/MixinFogRenderer.java",
-                        "me/cortex/voxy/client/mixin/minecraft/util/MixinClientCommonPacketListenerImpl.java"
+                        "me/cortex/voxy/client/mixin/minecraft/util/MixinClientCommonPacketListenerImpl.java",
+                        // Iris DepthTransformer does not exist in Iris 1.7.x (1.20.1); the reverse-Z patch that used it
+                        // is not applied on this target (see the 1.20.1 IrisShaderPatch)
+                        "me/cortex/voxy/client/mixin/iris/DepthTransformerAccessor.java"
                     ].contains(element.path)
                     return isMainTree && (replacedByLegacySource || modernConfigOnly || optionalModernIntegration)
                 }
