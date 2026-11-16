@@ -1,5 +1,6 @@
 {
   "required": true,
+  "refmap": "voxy-refmap.json",
   "package": "me.cortex.voxy.commonImpl.mixin",
   "plugin": "me.cortex.voxy.common.MixinConfig",
   "compatibilityLevel": "JAVA_17",

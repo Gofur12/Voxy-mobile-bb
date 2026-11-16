@@ -424,8 +424,9 @@ public class Mapper {
                 }
                 var state = BlockState.CODEC.parse(NbtOps.INSTANCE, bsc);
 
+                final var bscForLog = bsc; // bsc di-assign ulang saat migrasi, jadi lambda harus pakai salinan final
                 var decodedState = state.resultOrPartial(message ->
-                        Logger.error("Could not fully decode blockstate id:" + id + " error: " + message + " tag:" + bsc));
+                        Logger.error("Could not fully decode blockstate id:" + id + " error: " + message + " tag:" + bscForLog));
                 if (decodedState.isEmpty()) {
                     Logger.error("Could not decode blockstate, setting to air. id:" + id + " tag:" + bsc);
                     return new StateEntry(id, Blocks.AIR.defaultBlockState());

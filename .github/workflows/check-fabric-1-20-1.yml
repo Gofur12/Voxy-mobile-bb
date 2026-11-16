@@ -30,6 +30,68 @@ jobs:
       - name: Build Fabric 1.20.1 target
         run: sh ./gradlew -PvoxyTarget=1.20.1 build --info --stacktrace
 
+      # Stage 90: the game runs in Fabric intermediary, so every Mojang-named mixin target needs a
+      # refmap inside the jar. A jar without one crashes at startup ("No refMap loaded").
+      - name: Verify mixin refmap in built jar
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import glob
+          import json
+          import sys
+          import zipfile
+
+          jars = [j for j in glob.glob("build/libs/*.jar") if not j.endswith(("-dev.jar", "-sources.jar"))]
+          if not jars:
+              sys.exit("No remapped jar found in build/libs")
+
+          problems = []
+          for jar in jars:
+              with zipfile.ZipFile(jar) as z:
+                  names = set(z.namelist())
+                  meta = json.loads(z.read("fabric.mod.json"))
+                  configs = []
+                  for entry in meta.get("mixins", []):
+                      configs.append(entry if isinstance(entry, str) else entry["config"])
+                  for cfg in configs:
+                      if cfg not in names:
+                          problems.append(f"{jar}: mixin config {cfg} missing from jar")
+                          continue
+                      data = json.loads(z.read(cfg))
+                      refmap = data.get("refmap")
+                      if not refmap:
+                          problems.append(f"{jar}: {cfg} has no 'refmap' key")
+                          continue
+                      if refmap not in names:
+                          problems.append(f"{jar}: {cfg} points to {refmap}, which is not in the jar")
+                          continue
+                      mappings = json.loads(z.read(refmap)).get("mappings", {})
+                      remapped = [v for cls in mappings.values() for v in cls.values()]
+                      intermediary = [v for v in remapped if "method_" in v or "field_" in v or "class_" in v]
+                      print(f"{jar}: {cfg} -> {refmap}: {len(mappings)} mixin classes, {len(intermediary)} intermediary entries")
+                      if not intermediary:
+                          problems.append(f"{jar}: {refmap} has no intermediary mappings")
+                      for mixin_cls, entries in mappings.items():
+                          if mixin_cls.endswith("session/MixinMinecraft"):
+                              hit = [k for k in entries if k.startswith("disconnect(")]
+                              if not hit:
+                                  problems.append(f"{jar}: {refmap} has no mapping for MixinMinecraft disconnect(Screen)")
+
+          if problems:
+              print("\n".join(problems))
+              sys.exit(1)
+          PY
+
+      - name: Upload Fabric 1.20.1 jar
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: voxy-fabric-1-20-1
+          path: |
+            build/libs/*.jar
+            !build/libs/*-dev.jar
+          if-no-files-found: error
+
       # Loom currently fails while reading an access widener with an unexpected
       # namespace. Scan downloaded mod jars even when the build step fails.
       - name: Diagnose access widener namespaces
@@ -77,3 +139,4 @@ jobs:
                   continue
           print(f"Scanned cached jars; access-widener entries found: {found}")
           PY
+          

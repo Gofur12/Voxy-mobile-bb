@@ -291,6 +291,28 @@ loom {
     accessWidenerPath = file(voxyTarget == "1.20.1" ? "src/main/resources/voxy-1.20.1.accesswidener" : "src/main/resources/voxy.accesswidener")
 }
 
+if (voxyTarget == "1.20.1") {
+    // Stage 90: this target authors @Inject/@Shadow targets in Mojang names, but the game runs in
+    // Fabric intermediary. Without a refmap Mixin cannot resolve them and crashes at startup
+    // ("No refMap loaded"). Force the legacy Mixin AP on and pin the refmap name so the
+    // "refmap" key in client/common.voxy.1.20.1.mixins.json always matches the generated file.
+    // Guarded with hasProperty so a Loom release that drops either property degrades to a warning.
+    loom {
+        mixin { m ->
+            if (m.hasProperty("useLegacyMixinAp")) {
+                m.useLegacyMixinAp = true
+            } else {
+                logger.warn("Loom mixin extension has no 'useLegacyMixinAp'; refmap AP not forced")
+            }
+            if (m.hasProperty("defaultRefmapName")) {
+                m.defaultRefmapName = "voxy-refmap.json"
+            } else {
+                logger.warn("Loom mixin extension has no 'defaultRefmapName'; refmap name not pinned")
+            }
+        }
+    }
+}
+
 def runtimeOnlyMsk = {arg->}
 if (!isInGHA) {
     runtimeOnlyMsk = { arg ->
