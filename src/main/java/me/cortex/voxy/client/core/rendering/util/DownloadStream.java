@@ -79,6 +79,7 @@ public class DownloadStream {
 
     public void download(GlBuffer buffer, long downloadOffset, long size, DownloadResultConsumer resultConsumer) {
         this.requireCurrentContext();
+        buffer.assertContextCurrent();
         if (size > Integer.MAX_VALUE || size <= 0 || downloadOffset < 0
                 || downloadOffset > buffer.size() || size > buffer.size() - downloadOffset) {
             throw new IllegalArgumentException("Invalid download range");

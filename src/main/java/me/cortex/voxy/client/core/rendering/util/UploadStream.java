@@ -80,8 +80,13 @@ public class UploadStream {
     }
 
     public long upload(GlBuffer buffer, long destOffset, long size) {
-        if (size < 0 || size > Integer.MAX_VALUE) {
+        this.requireCurrentContext();
+        buffer.assertContextCurrent();
+        if (size <= 0 || size > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("Upload size is outside the supported range");
+        }
+        if (destOffset < 0 || destOffset > buffer.size() || size > buffer.size() - destOffset) {
+            throw new IllegalArgumentException("Upload destination range is outside the target buffer");
         }
         long uploadOffset = this.rawUploadAddress((int) size);
         this.uploadList.add(new UploadData(buffer, uploadOffset, destOffset, size));
