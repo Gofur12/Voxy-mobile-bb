@@ -11,20 +11,23 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Adds a direct Voxy settings entry to Sodium's Video Settings screen.
- * Mod Menu remains available as a secondary entry point.
+ * Adds a direct Voxy settings entry to Sodium 0.5.x Video Settings.
+ * SodiumOptionsGUI inherits Screen.init() instead of declaring its own init method,
+ * so hook Screen and restrict the button to the Sodium options screen.
  */
-@Mixin(targets = "me.jellysquid.mods.sodium.client.gui.SodiumOptionsGUI", remap = false)
-public abstract class MixinSodiumOptionsGUI extends Screen {
-    protected MixinSodiumOptionsGUI(Component title) {
-        super(title);
-    }
-
-    @Inject(method = "init", at = @At("TAIL"), remap = false)
+@Mixin(Screen.class)
+public abstract class MixinSodiumOptionsGUI {
+    @Inject(method = "init", at = @At("TAIL"))
     private void voxy$addVideoSettingsButton(CallbackInfo ci) {
-        this.addRenderableWidget(Button.builder(Component.literal("Voxy Settings"), button ->
-                Minecraft.getInstance().setScreen(new VoxyConfigScreen((Screen) (Object) this)))
-                .bounds(Math.max(8, this.width - 112), 6, 104, 20)
+        Screen screen = (Screen) (Object) this;
+        if (!"me.jellysquid.mods.sodium.client.gui.SodiumOptionsGUI".equals(
+                screen.getClass().getName())) {
+            return;
+        }
+
+        screen.addRenderableWidget(Button.builder(Component.literal("Voxy Settings"), button ->
+                Minecraft.getInstance().setScreen(new VoxyConfigScreen(screen)))
+                .bounds(Math.max(8, screen.width - 112), 6, 104, 20)
                 .build());
     }
 }
