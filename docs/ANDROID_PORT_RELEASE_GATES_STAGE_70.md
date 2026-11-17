@@ -9,19 +9,17 @@ commit or stage count.
 
 ## Verified blockers in the current source
 
-### 1. The repository target is not Minecraft 1.20.1
+### 1. The repository has a separate Minecraft 1.20.1 build target
 
-The current `gradle.properties` selects:
+The default `gradle.properties` profile selects Minecraft `26.3`, Fabric
+Loader `0.19.5`, Fabric API `0.160.5+26.3`, and Java compile release `25`.
+The Gradle build now provides an isolated `-PvoxyTarget=1.20.1` profile with
+Minecraft `1.20.1`, Fabric Loader `0.19.2`, Fabric API `0.92.8+1.20.1`,
+Sodium `0.5.13`, Iris `1.7.6`, and Java compile release `17`.
 
-- Minecraft `26.3`
-- Fabric Loader `0.19.5`
-- Fabric API `0.160.5+26.3`
-- Java compile release `25`
-
-There is no separate 1.20.1 build configuration in the inspected Gradle
-settings. Supporting 1.20.1 through newer Minecraft versions requires a
-version/build matrix and source compatibility work; it is not achieved by the
-GL backend abstraction alone.
+The `check-fabric-1-20-1.yml` workflow builds this target separately. CI
+success confirms compilation and artifact packaging only; it does not confirm
+that the mod loads, enters a world, or renders on Android.
 
 ### 2. The active renderer remains desktop-only
 
@@ -56,9 +54,9 @@ implementation is present.
 
 These are completion gates, not promises of fixed calendar dates:
 
-1. **Build separation:** preserve the current desktop target and establish an
-   independent Fabric 1.20.1 target with compatible Java, mappings, loader,
-   Sodium/Iris integration, and dependency versions.
+1. **Build separation:** preserve the current desktop target and maintain the
+   independent Fabric 1.20.1 profile. CI compilation is established; in-game
+   compatibility and Android runtime validation remain open.
 2. **Portable resource layer:** implement and compile the GLES-safe subset for
    buffers, textures, framebuffer/renderbuffer operations, shaders, and VAOs.
    Remove or gate desktop-only calls from every code path reachable by the
@@ -90,7 +88,15 @@ repeatable runtime checks on the target GPU.
 - Concrete GLES backend: not implemented.
 - Android EGL provider: not implemented.
 - Android LOD renderer: not implemented.
-- Fabric 1.20.1 build target: not established in the inspected Gradle config.
+- Fabric 1.20.1 build target: established; CI build has passed on recent commits.
+- Android-only runtime guards: Windows GPU selection mixin and desktop CPU
+  topology probes are skipped on Android/non-Windows as appropriate.
+- 1.20.1 mixin compatibility: BlockableEventLoop mixin omitted from the 1.20.1
+  config; login-session hook uses the stable `handleLogin` tail.
+- Upload stream: pending copies are committed before allocation-pressure
+  waiting; integer alignment overflow is rejected.
+- Optional graphics providers: runtime linkage failures are handled as an
+  unavailable provider rather than crashing provider selection.
 - Android package/runtime validation: not performed.
 
 No completion date can responsibly be estimated until milestones 1–4 have
