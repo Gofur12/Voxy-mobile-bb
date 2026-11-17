@@ -26,6 +26,7 @@
     "sodium.MixinDefaultChunkRenderer",
     "sodium.MixinRenderSectionManager",
     "sodium.MixinSodiumWorldRenderer",
+    "sodium.MixinSodiumOptionsGUI",
     "sodium.MixinVisibleChunkCollector"
   ],
   "injectors": {
