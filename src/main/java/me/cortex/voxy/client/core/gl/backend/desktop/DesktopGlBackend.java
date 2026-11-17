@@ -19,7 +19,7 @@ import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 
 /**
- * Desktop OpenGL 4.5 implementation of the backend contract.
+ * Desktop OpenGL 4.6 implementation of the backend contract.
  *
  * The Minecraft/loader owns the context. This adapter must be created and
  * used only on a thread where that context is current.
@@ -29,7 +29,7 @@ public final class DesktopGlBackend implements GlBackend {
 
     public DesktopGlBackend() {
         org.lwjgl.opengl.GLCapabilities gl = GL.getCapabilities();
-        if (!gl.OpenGL45) {
+        if (!gl.OpenGL46) {
             throw new IllegalStateException("Desktop Voxy backend requires OpenGL 4.5");
         }
 
@@ -55,7 +55,7 @@ public final class DesktopGlBackend implements GlBackend {
 
     @Override
     public String name() {
-        return "desktop-opengl-45";
+        return "desktop-opengl-46";
     }
 
     @Override

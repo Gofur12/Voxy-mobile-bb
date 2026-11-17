@@ -98,15 +98,15 @@ public class VoxyRenderSystem {
                 + "', version='" + version + "'" + (zink ? " (Zink detected)" : ""));
 
         // The current MDIC renderer also relies on desktop GL 4.5 DSA.
-        if (!gl.OpenGL45) {
+        if (!gl.OpenGL46) {
             throw new UnsupportedOperationException(
-                    "Voxy MDIC requires desktop OpenGL 4.5 (DSA); active context is '" + version
+                    "Voxy MDIC requires desktop OpenGL 4.6 (GLSL 460 + DSA); active context is '" + version
                             + "' on renderer '" + renderer + "'. Use a desktop-GL-capable launcher renderer (e.g. Zink + Turnip), not GLES."
             );
         }
 
         GlCapabilities capabilities = new GlCapabilities(
-                4, 5, false,
+                4, 6, false,
                 gl.GL_ARB_buffer_storage,
                 gl.GL_ARB_buffer_storage,
                 gl.OpenGL43 || gl.GL_ARB_compute_shader,

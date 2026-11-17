@@ -94,6 +94,9 @@ public final class GlCapabilities {
      */
     public java.util.List<String> missingDesktopMdicFeatures() {
         java.util.List<String> missing = new java.util.ArrayList<>();
+        if (this.majorVersion < 4 || (this.majorVersion == 4 && this.minorVersion < 6)) {
+            missing.add("OpenGL 4.6 (Voxy LOD shaders use GLSL 460)");
+        }
         if (this.embeddedProfile) {
             missing.add("desktop OpenGL profile (embedded/GLES context detected)");
         }
