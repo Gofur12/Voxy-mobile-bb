@@ -86,16 +86,16 @@ public class VoxyRenderSystem {
             throw new IllegalStateException("Voxy renderer selection requires a current OpenGL context", noCurrentContext);
         }
 
-        // This renderer also relies on the desktop GL 4.5 DSA API. Do not
-        // infer compatibility from the device name or from GLES extensions.
-        if (!gl.OpenGL45) {
+        // MDIC shaders include GLSL 4.60 sources. Do not infer compatibility
+        // from the device name or from GLES extensions.
+        if (!gl.OpenGL46) {
             throw new UnsupportedOperationException(
-                    "Voxy MDIC renderer requires desktop OpenGL 4.5; no GLES renderer is available yet"
+                    "Voxy MDIC renderer requires desktop OpenGL 4.6 (GLSL 460); no GLES renderer is available yet"
             );
         }
 
         GlCapabilities capabilities = new GlCapabilities(
-                4, 5, false,
+                4, 6, false,
                 gl.GL_ARB_buffer_storage,
                 gl.GL_ARB_buffer_storage,
                 gl.OpenGL43 || gl.GL_ARB_compute_shader,
