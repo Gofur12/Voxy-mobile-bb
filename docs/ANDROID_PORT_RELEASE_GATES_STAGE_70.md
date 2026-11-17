@@ -50,6 +50,27 @@ Desktop state capture/restore has been added, but no temporary-FBO fallback
 uses it. The desktop backend still uses direct texture clear. No GLES FBO clear
 implementation is present.
 
+### 6. Default storage still depends on desktop/native libraries
+
+`StorageConfigUtil.createDefaultSerializer()` selects RocksDB plus the LWJGL
+Zstandard compressor. The repository also exposes LMDB and a native LZ4
+compressor. The current build packages desktop-oriented native artifacts and
+does not provide a verified Android/Bionic implementation for these storage
+paths. Switching to `MemoryStorageBackend` would avoid some native calls but
+would discard persisted LOD data between sessions, so it is not an acceptable
+silent fallback.
+
+An Android release needs a tested persistent Android-compatible storage
+backend and a compatible compressor, or verified Android ABI builds of every
+native dependency used by the selected configuration.
+
+### 7. LWJGL host-version compatibility is unresolved
+
+The build declares LWJGL `3.4.1`, while the Android launcher environment
+previously reported LWJGL `3.3.3`. Bundled LWJGL extension modules and native
+libraries must be aligned with the host-provided core binding. A successful
+desktop CI build does not validate this Android class/native compatibility.
+
 ## Release milestones
 
 These are completion gates, not promises of fixed calendar dates:
