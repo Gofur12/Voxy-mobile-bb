@@ -20,7 +20,7 @@ import java.util.ServiceLoader;
  * unavailable; they must never create or take ownership of the host context.
  */
 public final class GlBackendProviders {
-    private static final String DESKTOP_PROVIDER_ID = "desktop-opengl-45";
+    private static final String DESKTOP_PROVIDER_ID = "desktop-opengl-46";
 
     private GlBackendProviders() {}
 
