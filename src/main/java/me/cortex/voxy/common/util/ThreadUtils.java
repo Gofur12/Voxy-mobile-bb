@@ -13,8 +13,10 @@ public class ThreadUtils {
     public static final boolean isWindows = Platform.get() == Platform.WINDOWS;
     public static final boolean isLinux = Platform.get() == Platform.LINUX;
     public static final boolean isAndroid = propertyContains("os.name", "android")
+            || propertyContains("java.vendor", "android")
             || propertyContains("java.runtime.name", "android")
-            || propertyContains("java.vm.name", "dalvik");
+            || propertyContains("java.vm.name", "dalvik")
+            || propertyContains("java.vm.name", "art");
     private static final long SetThreadPriority;
     private static final long SetThreadSelectedCpuSetMasks;
     private static final long schedSetaffinity;
