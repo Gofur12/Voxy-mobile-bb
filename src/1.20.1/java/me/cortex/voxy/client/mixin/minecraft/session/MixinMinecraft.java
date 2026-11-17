@@ -2,7 +2,6 @@ package me.cortex.voxy.client.mixin.minecraft.session;
 
 import me.cortex.voxy.client.ClientSessionEvents;
 import me.cortex.voxy.client.VoxyClient;
-import me.cortex.voxy.client.VoxyClient;
 import net.minecraft.client.Minecraft;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
