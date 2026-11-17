@@ -385,11 +385,24 @@ public class UploadStream {
     }
 
     public static long alignUp(long val, long alignment) {
-        return ((val + alignment - 1) / alignment) * alignment;
+        if (val < 0 || alignment <= 0) {
+            throw new IllegalArgumentException("Value must be non-negative and alignment must be positive");
+        }
+        long remainder = val % alignment;
+        if (remainder == 0) return val;
+        long padding = alignment - remainder;
+        if (val > Long.MAX_VALUE - padding) {
+            throw new ArithmeticException("Aligned value exceeds the supported long range");
+        }
+        return val + padding;
     }
 
     public static int alignUp(int val, int alignment) {
-        return ((val + alignment - 1) / alignment) * alignment;
+        long aligned = alignUp((long) val, (long) alignment);
+        if (aligned > Integer.MAX_VALUE) {
+            throw new ArithmeticException("Aligned value exceeds the supported integer range");
+        }
+        return (int) aligned;
     }
 
     public static int alignUpAlloc(int val) {
