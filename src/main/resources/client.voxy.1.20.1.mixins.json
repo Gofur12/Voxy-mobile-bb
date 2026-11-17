@@ -20,7 +20,6 @@
     "minecraft.MixinClientChunkCacheStorage",
     "minecraft.session.MixinClientPacketListener",
     "minecraft.session.MixinMinecraft",
-    "minecraft.util.MixinBlockableEventLoop",
     "minecraft.util.MixinGPUSelect",
     "sodium.AccessorChunkTracker",
     "sodium.AccessorSodiumWorldRenderer",
