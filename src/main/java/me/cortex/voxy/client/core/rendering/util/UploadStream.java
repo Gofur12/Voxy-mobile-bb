@@ -151,6 +151,12 @@ public class UploadStream {
             this.caddr = this.allocationArena.alloc(size);
             if (this.caddr == SIZE_LIMIT) {
                 Logger.error("Upload stream full, preemptively waiting for old upload frames");
+
+                // Submit queued copies before fencing their source allocations.
+                // Otherwise tick(false) could retire mapped ranges while a later
+                // commit still needs to copy from those ranges.
+                this.commit();
+
                 int attempts = 10;
                 while (--attempts != 0 && this.caddr == SIZE_LIMIT) {
                     GlBackendRuntime.requireBackend(this.contextGeneration, "UploadStream").finish();
