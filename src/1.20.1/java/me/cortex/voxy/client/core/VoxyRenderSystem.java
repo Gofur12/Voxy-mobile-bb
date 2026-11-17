@@ -88,11 +88,20 @@ public class VoxyRenderSystem {
             throw new IllegalStateException("Voxy renderer selection requires a current OpenGL context", noCurrentContext);
         }
 
-        // This renderer also relies on the desktop GL 4.5 DSA API. Do not
-        // infer compatibility from the device name or from GLES extensions.
+        // Zink is accepted as a desktop OpenGL implementation when it exposes
+        // the same required API/features; the renderer must not rely on its name.
+        final String vendor = GL11.glGetString(GL11.GL_VENDOR);
+        final String renderer = GL11.glGetString(GL11.GL_RENDERER);
+        final String version = GL11.glGetString(GL11.GL_VERSION);
+        final boolean zink = renderer != null && renderer.toLowerCase(java.util.Locale.ROOT).contains("zink");
+        Logger.info("Voxy graphics context: vendor='" + vendor + "', renderer='" + renderer
+                + "', version='" + version + "'" + (zink ? " (Zink detected)" : ""));
+
+        // The current MDIC renderer also relies on desktop GL 4.5 DSA.
         if (!gl.OpenGL45) {
             throw new UnsupportedOperationException(
-                    "Voxy MDIC renderer requires desktop OpenGL 4.5; no GLES renderer is available yet"
+                    "Voxy MDIC requires desktop OpenGL 4.5 (DSA); active context is '" + version
+                            + "' on renderer '" + renderer + "'. Use a desktop-GL-capable launcher renderer (e.g. Zink + Turnip), not GLES."
             );
         }
 
@@ -112,8 +121,8 @@ public class VoxyRenderSystem {
         );
         if (!capabilities.supportsDesktopMdicPath()) {
             throw new UnsupportedOperationException(
-                    "Voxy MDIC renderer is unavailable: compute, SSBO, image load/store, " +
-                    "multi-draw indirect, or indirect parameters are unsupported"
+                    "Voxy MDIC renderer is unavailable on '" + renderer + "'. Missing: "
+                            + String.join(", ", capabilities.missingDesktopMdicFeatures())
             );
         }
         return MDICSectionRenderer.FACTORY;

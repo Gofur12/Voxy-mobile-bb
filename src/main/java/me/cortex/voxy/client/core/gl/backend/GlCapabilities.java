@@ -85,9 +85,33 @@ public final class GlCapabilities {
      * present before renderer construction is attempted.
      */
     public boolean supportsDesktopMdicPath() {
-        return !this.embeddedProfile
-                && this.supportsComputeLodPath()
-                && this.multiDrawIndirect
-                && this.indirectParameters;
+        return missingDesktopMdicFeatures().isEmpty();
+    }
+
+    /**
+     * Lists the exact desktop MDIC requirements absent from the active context.
+     * This is diagnostic only; it never relaxes the renderer compatibility gate.
+     */
+    public java.util.List<String> missingDesktopMdicFeatures() {
+        java.util.List<String> missing = new java.util.ArrayList<>();
+        if (this.embeddedProfile) {
+            missing.add("desktop OpenGL profile (embedded/GLES context detected)");
+        }
+        if (!this.computeShaders) {
+            missing.add("compute shaders (OpenGL 4.3 or ARB_compute_shader)");
+        }
+        if (!this.shaderStorageBuffers) {
+            missing.add("shader storage buffers (OpenGL 4.3 or ARB_shader_storage_buffer_object)");
+        }
+        if (!this.imageLoadStore) {
+            missing.add("image load/store (OpenGL 4.2 or ARB_shader_image_load_store)");
+        }
+        if (!this.multiDrawIndirect) {
+            missing.add("multi-draw indirect (OpenGL 4.3 or ARB_multi_draw_indirect)");
+        }
+        if (!this.indirectParameters) {
+            missing.add("indirect parameters (ARB_indirect_parameters)");
+        }
+        return java.util.Collections.unmodifiableList(missing);
     }
 }
