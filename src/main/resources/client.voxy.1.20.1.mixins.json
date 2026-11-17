@@ -18,7 +18,6 @@
     "minecraft.MixinLevelRenderer",
     "minecraft.MixinLevelRendererLifecycle",
     "minecraft.MixinClientChunkCacheStorage",
-    "minecraft.MixinRenderSystem",
     "minecraft.session.MixinClientPacketListener",
     "minecraft.session.MixinMinecraft",
     "minecraft.util.MixinBlockableEventLoop",
