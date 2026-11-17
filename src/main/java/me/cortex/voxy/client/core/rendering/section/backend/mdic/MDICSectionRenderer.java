@@ -74,7 +74,7 @@ public class MDICSectionRenderer extends AbstractSectionRenderer<MDICViewport, B
 
     private final Shader prefixSumShader = Shader.make()
             //Use subgroup prefix sum if possible otherwise use dodgy... slow prefix sum
-            .add(ShaderType.COMPUTE, Capabilities.INSTANCE.subgroup?"voxy:util/prefixsum/inital3.comp":"voxy:util/prefixsum/simple.comp")
+            .add(ShaderType.COMPUTE, Capabilities.require().subgroup?"voxy:util/prefixsum/inital3.comp":"voxy:util/prefixsum/simple.comp")
             .define("IO_BUFFER", 0)
             .compile();
 
@@ -95,6 +95,7 @@ public class MDICSectionRenderer extends AbstractSectionRenderer<MDICViewport, B
     private final GlBuffer statisticsBuffer = new GlBuffer(1024).zero();
 
     private final AbstractRenderPipeline pipeline;
+    private final GlVertexArray emptyVao;
     public MDICSectionRenderer(AbstractRenderPipeline pipeline, ModelStore modelStore, BasicSectionGeometryData geometryData) {
         super(pipeline.properties, modelStore, geometryData);
         this.pipeline = pipeline;
@@ -110,9 +111,9 @@ public class MDICSectionRenderer extends AbstractSectionRenderer<MDICViewport, B
                 .defineIf("TAA_PATCH", taa != null)
                 .defineIf("DEBUG_RENDER", false)
 
-                //.defineIf("USE_NV_JANK", Capabilities.INSTANCE.isNvidia)//TODO: fix use capability to try compile the jank thing to see if it can be and use that
+                //.defineIf("USE_NV_JANK", Capabilities.require().isNvidia)//TODO: fix use capability to try compile the jank thing to see if it can be and use that
 
-                //.defineIf("USE_NV_BARRY", Capabilities.INSTANCE.nvBarryCoords)
+                //.defineIf("USE_NV_BARRY", Capabilities.require().nvBarryCoords)
 
                 .addSource(ShaderType.VERTEX, vertex);
 
@@ -146,6 +147,7 @@ public class MDICSectionRenderer extends AbstractSectionRenderer<MDICViewport, B
                     .add(ShaderType.FRAGMENT, "voxy:lod/gl46/cull/raster.frag")
                     .compile();
         }
+        this.emptyVao = new GlVertexArray();
     }
 
     private void uploadUniformBuffer(MDICViewport viewport) {
@@ -191,7 +193,7 @@ public class MDICSectionRenderer extends AbstractSectionRenderer<MDICViewport, B
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(this.properties.closerEqualDepthCompare());
         this.terrainShader.bind();
-        glBindVertexArray(GlVertexArray.STATIC_VAO);//Needs to be before binding
+        this.emptyVao.bind();//Needs to be before binding
         this.pipeline.setupAndBindOpaque(viewport);
         this.bindRenderingBuffers(viewport);
 
@@ -236,7 +238,7 @@ public class MDICSectionRenderer extends AbstractSectionRenderer<MDICViewport, B
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(this.properties.closerEqualDepthCompare());
         this.translucentTerrainShader.bind();
-        glBindVertexArray(GlVertexArray.STATIC_VAO);//Needs to be before binding
+        this.emptyVao.bind();//Needs to be before binding
         this.pipeline.setupAndBindTranslucent(viewport);
         this.bindRenderingBuffers(viewport);
 
@@ -276,10 +278,10 @@ public class MDICSectionRenderer extends AbstractSectionRenderer<MDICViewport, B
         {//Test occlusion
             this.cullShader.bind();
             if (this.pipeline.hasTAA()) this.pipeline.bindUniforms();//Used for shader TAA
-            if (Capabilities.INSTANCE.repFragTest) {
+            if (Capabilities.require().repFragTest) {
                 glEnable(GL_REPRESENTATIVE_FRAGMENT_TEST_NV);
             }
-            glBindVertexArray(GlVertexArray.STATIC_VAO);
+            this.emptyVao.bind();
             glBindBufferBase(GL_UNIFORM_BUFFER, 0, this.uniform.id);
             glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, this.geometryManager.getMetadataBuffer().id);
             glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, viewport.visibilityBuffer.id);
@@ -295,7 +297,7 @@ public class MDICSectionRenderer extends AbstractSectionRenderer<MDICViewport, B
             glDepthMask(true);
             glColorMask(true, true, true, true);
             glDisable(GL_DEPTH_TEST);
-            if (Capabilities.INSTANCE.repFragTest) {
+            if (Capabilities.require().repFragTest) {
                 glDisable(GL_REPRESENTATIVE_FRAGMENT_TEST_NV);
             }
         }
@@ -392,5 +394,6 @@ public class MDICSectionRenderer extends AbstractSectionRenderer<MDICViewport, B
         this.translucentGenShader.free();
         this.prefixSumShader.free();
         this.statisticsBuffer.free();
+        this.emptyVao.free();
     }
 }

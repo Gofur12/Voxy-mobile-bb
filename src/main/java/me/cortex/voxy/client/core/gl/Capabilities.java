@@ -2,6 +2,7 @@ package me.cortex.voxy.client.core.gl;
 
 import me.cortex.voxy.client.core.gl.shader.ShaderType;
 import me.cortex.voxy.common.Logger;
+import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL20C;
 import org.lwjgl.opengl.GL30;
@@ -33,7 +34,10 @@ import static org.lwjgl.opengl.NVXGPUMemoryInfo.*;
 
 public class Capabilities {
 
-    public static final Capabilities INSTANCE = new Capabilities();
+    /** The capability snapshot belonging to the currently active graphics context. */
+    public static volatile Capabilities INSTANCE;
+
+    private final long contextGeneration;
 
     public final boolean repFragTest;
     public final boolean meshShaders;
@@ -55,6 +59,35 @@ public class Capabilities {
     public final boolean hasBrokenDepthSampler;
 
     public Capabilities() {
+        var backend = GlBackendRuntime.requireBackend();
+        this.contextGeneration = GlBackendRuntime.getContextGeneration();
+
+        // Embedded providers already report version/extension capabilities
+        // through the backend-neutral contract. Do not initialize LWJGL's
+        // desktop GLCapabilities for an EGL/GLES context.
+        var backendCapabilities = backend.capabilities();
+        if (backendCapabilities.embeddedProfile) {
+            this.sparseBuffer = false;
+            this.compute = backendCapabilities.computeShaders;
+            this.indirectParameters = backendCapabilities.indirectParameters;
+            this.repFragTest = false;
+            this.meshShaders = false;
+            this.canQueryGpuMemory = false;
+            this.INT64_t = backendCapabilities.shaderInt64;
+            this.subgroup = backendCapabilities.subgroupOperations;
+            this.ssboMaxSize = -1L;
+            this.ssboBindingAlignment = -1;
+            this.isMesa = false;
+            this.isIntel = false;
+            this.isNvidia = false;
+            this.isAmd = false;
+            this.totalDedicatedMemory = -1L;
+            this.totalDynamicMemory = -1L;
+            this.nvBarryCoords = false;
+            this.hasBrokenDepthSampler = false;
+            return;
+        }
+
         var cap = GL.getCapabilities();
         this.sparseBuffer = cap.GL_ARB_sparse_buffer;
         this.compute = cap.glDispatchComputeIndirect != 0;
@@ -115,7 +148,26 @@ public class Capabilities {
         }
     }
 
-    public static void init() {
+    /** Creates a fresh capability snapshot after a graphics backend is active. */
+    public static synchronized void init() {
+        GlBackendRuntime.requireBackend();
+        INSTANCE = null;
+        INSTANCE = new Capabilities();
+    }
+
+    /** Drops the snapshot before the owning graphics backend is shut down. */
+    public static synchronized void clear() {
+        INSTANCE = null;
+    }
+
+    /** Returns the snapshot for the active context, failing clearly when it is absent or stale. */
+    public static Capabilities require() {
+        Capabilities snapshot = INSTANCE;
+        if (snapshot == null) {
+            throw new IllegalStateException("Graphics capabilities have not been initialized for the active context");
+        }
+        GlBackendRuntime.requireBackend(snapshot.contextGeneration, "graphics capabilities");
+        return snapshot;
     }
 
     private static boolean testDepthSampler() {
@@ -213,6 +265,7 @@ public class Capabilities {
     }
 
     public long getFreeDedicatedGpuMemory() {
+        GlBackendRuntime.requireBackend(this.contextGeneration, "graphics capabilities");
         if (!this.canQueryGpuMemory) {
             throw new IllegalStateException("Cannot query gpu memory, missing extension");
         }

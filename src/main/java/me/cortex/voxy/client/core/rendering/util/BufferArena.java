@@ -25,8 +25,8 @@ public class BufferArena {
         if (capacity%elementSize != 0) {
             throw new IllegalArgumentException("Capacity not a multiple of element size");
         }
-        if (CHECK_SSBO_MAX_SIZE_CHECK && capacity > Capabilities.INSTANCE.ssboMaxSize) {
-            throw new IllegalArgumentException("Buffer is bigger than max ssbo size (requested " + capacity + " but has max of " + Capabilities.INSTANCE.ssboMaxSize+")");
+        if (CHECK_SSBO_MAX_SIZE_CHECK && capacity > Capabilities.require().ssboMaxSize) {
+            throw new IllegalArgumentException("Buffer is bigger than max ssbo size (requested " + capacity + " but has max of " + Capabilities.require().ssboMaxSize+")");
         }
         this.size = capacity;
         this.elementSize = elementSize;
@@ -43,7 +43,7 @@ public class BufferArena {
         if (addr == -1) {
             return -1;
         }
-        long uploadPtr = UploadStream.INSTANCE.upload(this.buffer, addr * this.elementSize, buffer.size);
+        long uploadPtr = UploadStream.requireInstance().upload(this.buffer, addr * this.elementSize, buffer.size);
         UnsafeUtil.memcpy(buffer.address, uploadPtr, buffer.size);
         this.used += size;
         return addr;
@@ -73,6 +73,6 @@ public class BufferArena {
     public void downloadRemove(long allocation, Consumer<MemoryBuffer> consumer) {
         int size = this.allocationMap.free(allocation);
         this.used -= size;
-        DownloadStream.INSTANCE.download(this.buffer, allocation*this.elementSize, (long) size *this.elementSize, consumer);
+        DownloadStream.requireInstance().download(this.buffer, allocation*this.elementSize, (long) size *this.elementSize, consumer);
     }
 }

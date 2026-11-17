@@ -4,6 +4,7 @@ import me.cortex.voxy.client.core.RenderProperties;
 import me.cortex.voxy.client.core.gl.GlFramebuffer;
 import me.cortex.voxy.client.core.gl.GlTexture;
 import me.cortex.voxy.client.core.gl.GlVertexArray;
+import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
 import me.cortex.voxy.client.core.gl.shader.Shader;
 import me.cortex.voxy.client.core.gl.shader.ShaderType;
 import org.lwjgl.opengl.GL11;
@@ -23,6 +24,7 @@ import static org.lwjgl.opengl.GL45C.glTextureBarrier;
 public class HiZBuffer {
     private final Shader hiz;
     private final GlFramebuffer fb = new GlFramebuffer().name("HiZ");
+    private final GlVertexArray emptyVao;
     private final int sampler = glGenSamplers();
     private final int type;
     private GlTexture texture;
@@ -35,6 +37,7 @@ public class HiZBuffer {
         this(properties, GL_DEPTH24_STENCIL8);
     }
     public HiZBuffer(RenderProperties properties, int type) {
+        this.emptyVao = new GlVertexArray();
         glNamedFramebufferDrawBuffer(this.fb.id, GL_NONE);
         this.type = type;
         this.hiz = Shader.make()
@@ -80,7 +83,7 @@ public class HiZBuffer {
             }
             this.alloc(Integer.highestOneBit(width), Integer.highestOneBit(height));
         }
-        glBindVertexArray(GlVertexArray.STATIC_VAO);
+        this.emptyVao.bind();
         int boundFB = GL11.glGetInteger(GL_DRAW_FRAMEBUFFER_BINDING);
         this.hiz.bind();
         glBindFramebuffer(GL_FRAMEBUFFER, this.fb.id);
@@ -92,7 +95,7 @@ public class HiZBuffer {
 
         glBindTextureUnit(0, srcDepthTex);
         glBindSampler(0, this.sampler);
-        glUniform1i(0, 0);
+        GlBackendRuntime.requireBackend().setUniform1i(0, 0);
         int cw = this.width;
         int ch = this.height;
         for (int i = 0; i < this.levels; i++) {
@@ -118,6 +121,7 @@ public class HiZBuffer {
     }
 
     public void free() {
+        this.emptyVao.free();
         this.fb.free();
         if (this.texture != null) {
             this.texture.free();

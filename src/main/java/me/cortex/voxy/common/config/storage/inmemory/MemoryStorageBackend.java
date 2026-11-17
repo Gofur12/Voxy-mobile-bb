@@ -11,7 +11,6 @@ import me.cortex.voxy.common.config.storage.StorageConfig;
 import me.cortex.voxy.common.util.MemoryBuffer;
 import me.cortex.voxy.common.world.WorldEngine;
 import net.minecraft.world.level.levelgen.RandomSupport;
-import org.apache.commons.lang3.stream.Streams;
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
@@ -124,7 +123,11 @@ public class MemoryStorageBackend extends StorageBackend {
 
     @Override
     public void close() {
-        Streams.of(this.maps).map(Long2ObjectMap::values).flatMap(ObjectCollection::stream).forEach(MemoryBuffer::free);
+        for (Long2ObjectMap<MemoryBuffer> map : this.maps) {
+            for (MemoryBuffer buffer : map.values()) {
+                buffer.free();
+            }
+        }
         this.idMappings.values().forEach(MemoryUtil::memFree);
     }
 

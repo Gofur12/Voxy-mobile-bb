@@ -3,21 +3,18 @@ package me.cortex.voxy.client.core.gl.shader;
 import me.cortex.voxy.client.core.gl.GlBuffer;
 import me.cortex.voxy.client.core.gl.GlDebug;
 import me.cortex.voxy.client.core.gl.GlTexture;
+import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import static org.lwjgl.opengl.ARBDirectStateAccess.glBindTextureUnit;
-import static org.lwjgl.opengl.GL30.glBindBufferBase;
-import static org.lwjgl.opengl.GL30.glBindBufferRange;
-import static org.lwjgl.opengl.GL31.GL_UNIFORM_BUFFER;
-import static org.lwjgl.opengl.GL33.glBindSampler;
-import static org.lwjgl.opengl.GL43.GL_SHADER_STORAGE_BUFFER;
-
-
 //TODO: rewrite the entire shader builder system
 public class AutoBindingShader extends Shader {
+
+    // OpenGL enum values are API constants; actual calls are delegated to GlBackend.
+    private static final int GL_UNIFORM_BUFFER = 0x8A11;
+    private static final int GL_SHADER_STORAGE_BUFFER = 0x90D2;
 
     private record BufferBinding(int target, int index, GlBuffer buffer, long offset, long size) {}
     private record TextureBinding(int unit, int sampler, GlTexture texture) {}
@@ -34,6 +31,7 @@ public class AutoBindingShader extends Shader {
     }
 
     public AutoBindingShader name(String name) {
+        this.assertContextCurrent();
         return GlDebug.name(name, this);
     }
 
@@ -122,22 +120,26 @@ public class AutoBindingShader extends Shader {
          */
         if (!this.bindings.isEmpty()) {
             for (var binding : this.bindings) {
-                binding.buffer.assertNotFreed();
+                binding.buffer.assertContextCurrent();
                 if (binding.offset == 0 && binding.size == -1) {
-                    glBindBufferBase(binding.target, binding.index, binding.buffer.id);
+                    GlBackendRuntime.requireBackend().bindBufferBase(binding.target, binding.index, binding.buffer.id);
                 } else {
-                    glBindBufferRange(binding.target, binding.index, binding.buffer.id, binding.offset, binding.size);
+                    long rangeSize = binding.size == -1 ? binding.buffer.size() - binding.offset : binding.size;
+                    if (binding.offset < 0 || rangeSize <= 0 || binding.offset + rangeSize > binding.buffer.size()) {
+                        throw new IllegalArgumentException("Invalid shader buffer binding range");
+                    }
+                    GlBackendRuntime.requireBackend().bindBufferRange(binding.target, binding.index, binding.buffer.id, binding.offset, rangeSize);
                 }
             }
         }
         if (!this.textureBindings.isEmpty()) {
             for (var binding : this.textureBindings) {
                 if (binding.texture != null) {
-                    binding.texture.assertNotFreed();
-                    glBindTextureUnit(binding.unit, binding.texture.id);
+                    binding.texture.assertContextCurrent();
+                    GlBackendRuntime.requireBackend().bindTextureUnit(binding.unit, binding.texture.id);
                 }
                 if (binding.sampler != -1) {
-                    glBindSampler(binding.unit, binding.sampler);
+                    GlBackendRuntime.requireBackend().bindSampler(binding.unit, binding.sampler);
                 }
             }
         }

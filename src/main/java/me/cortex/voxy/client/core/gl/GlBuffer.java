@@ -2,18 +2,17 @@ package me.cortex.voxy.client.core.gl;
 
 import me.cortex.voxy.common.util.MemoryBuffer;
 import me.cortex.voxy.common.util.TrackedObject;
-import org.lwjgl.opengl.GL11;
+import me.cortex.voxy.client.core.gl.backend.GlBackend;
+import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
 import org.lwjgl.system.MemoryUtil;
 
 import static org.lwjgl.opengl.ARBSparseBuffer.GL_SPARSE_STORAGE_BIT_ARB;
-import static org.lwjgl.opengl.GL11.GL_UNSIGNED_BYTE;
-import static org.lwjgl.opengl.GL15.glDeleteBuffers;
-import static org.lwjgl.opengl.GL45C.*;
 
 public class GlBuffer extends TrackedObject {
     public final int id;
     private final long size;
     private final int flags;
+    private final long contextGeneration;
 
     private static int COUNT;
     private static long TOTAL_SIZE;
@@ -39,12 +38,23 @@ public class GlBuffer extends TrackedObject {
     }
 
     private GlBuffer(long size, int flags, boolean zero, long data) {
+        if (size <= 0) throw new IllegalArgumentException("Buffer size must be positive");
         this.flags = flags;
-        this.id = glCreateBuffers();
         this.size = size;
-        nglNamedBufferStorage(this.id, size, data, flags);
-        if ((flags&GL_SPARSE_STORAGE_BIT_ARB)==0 && zero) {
-            this.zero();
+        GlBackend backend = GlBackendRuntime.requireBackend();
+        this.id = backend.createBuffer(size, data, flags);
+        this.contextGeneration = GlBackendRuntime.getContextGeneration();
+        try {
+            if ((flags & GL_SPARSE_STORAGE_BIT_ARB) == 0 && zero) {
+                this.zero();
+            }
+        } catch (RuntimeException | Error initializationFailure) {
+            try {
+                backend.deleteBuffer(this.id);
+            } catch (RuntimeException | Error cleanupFailure) {
+                if (initializationFailure != cleanupFailure) initializationFailure.addSuppressed(cleanupFailure);
+            }
+            throw initializationFailure;
         }
 
         COUNT++;
@@ -54,39 +64,96 @@ public class GlBuffer extends TrackedObject {
     @Override
     public void free() {
         this.free0();
-        glDeleteBuffers(this.id);
+        try {
+            if (GlBackendRuntime.isContextGenerationCurrent(this.contextGeneration)) {
+                GlBackendRuntime.requireBackend(this.contextGeneration, "GlBuffer").deleteBuffer(this.id);
+            }
+        } finally {
+            COUNT--;
+            TOTAL_SIZE -= this.size;
+        }
+    }
 
-        COUNT--;
-        TOTAL_SIZE -= this.size;
+    public void assertContextCurrent() {
+        this.assertNotFreed();
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlBuffer");
     }
 
     public boolean isSparse() {
-        return (this.flags&GL_SPARSE_STORAGE_BIT_ARB)!=0;
+        return (this.flags & GL_SPARSE_STORAGE_BIT_ARB) != 0;
     }
 
     public long size() {
         return this.size;
     }
 
+    /**
+     * Fills the complete buffer with zero bytes using bounded CPU staging.
+     * This deliberately avoids desktop-only named-buffer clear operations.
+     */
     public GlBuffer zero() {
-        nglClearNamedBufferData(this.id, GL_R8UI, GL_RED_INTEGER, GL_UNSIGNED_BYTE, 0);
+        this.uploadRepeated(0, this.size, 0, true);
         return this;
     }
 
     public GlBuffer zeroRange(long offset, long size) {
-        nglClearNamedBufferSubData(this.id, GL_R8UI, offset, size, GL_RED_INTEGER, GL_UNSIGNED_BYTE, 0);
+        this.validateRange(offset, size);
+        this.uploadRepeated(offset, size, 0, true);
         return this;
     }
 
+    /**
+     * Repeats the supplied 32-bit value over the buffer, matching the old
+     * GL_R32UI clear semantics without requiring glClearBufferData.
+     */
     public GlBuffer fill(int data) {
-        //Clear unpack values
-        //Fixed in mesa commit a5c3c452
-        glPixelStorei(GL11.GL_UNPACK_SKIP_ROWS, 0);
-        glPixelStorei(GL11.GL_UNPACK_SKIP_PIXELS, 0);
-
-        MemoryUtil.memPutInt(SCRATCH, data);
-        nglClearNamedBufferData(this.id, GL_R32UI, GL_RED_INTEGER, GL_UNSIGNED_INT, SCRATCH);
+        if ((this.size & 3L) != 0L) {
+            throw new IllegalStateException("32-bit fill requires a buffer size divisible by 4");
+        }
+        this.uploadRepeated(0, this.size, data, false);
         return this;
+    }
+
+    private void validateRange(long offset, long length) {
+        if (offset < 0 || length < 0 || offset > this.size || length > this.size - offset) {
+            throw new IllegalArgumentException("Buffer upload range is outside the allocation");
+        }
+    }
+
+    private void uploadRepeated(long offset, long length, int pattern, boolean zero) {
+        this.validateRange(offset, length);
+        if (length == 0) return;
+
+        final int chunkCapacity = 64 * 1024;
+        final long staging = zero
+                ? MemoryUtil.nmemCalloc(1, chunkCapacity)
+                : MemoryUtil.nmemAlloc(chunkCapacity);
+        if (staging == 0L) {
+            throw new OutOfMemoryError("Unable to allocate 64 KiB buffer staging block");
+        }
+
+        try {
+            if (!zero) {
+                for (int i = 0; i < chunkCapacity; i += Integer.BYTES) {
+                    MemoryUtil.memPutInt(staging + i, pattern);
+                }
+            }
+
+            GlBackend backend = GlBackendRuntime.requireBackend(this.contextGeneration, "GlBuffer");
+            long remaining = length;
+            long destination = offset;
+            while (remaining > 0) {
+                long amount = Math.min(remaining, chunkCapacity);
+                if (!zero && (amount & 3L) != 0L) {
+                    throw new IllegalArgumentException("32-bit fill range must be divisible by 4");
+                }
+                backend.uploadBuffer(this.id, destination, amount, staging);
+                destination += amount;
+                remaining -= amount;
+            }
+        } finally {
+            MemoryUtil.nmemFree(staging);
+        }
     }
 
     public static int getCount() {
@@ -98,8 +165,7 @@ public class GlBuffer extends TrackedObject {
     }
 
     public GlBuffer name(String name) {
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlBuffer");
         return GlDebug.name(name, this);
     }
-
-    private static final long SCRATCH = MemoryUtil.nmemAlloc(4);
 }

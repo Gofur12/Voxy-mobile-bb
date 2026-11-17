@@ -5,9 +5,6 @@ import com.sun.jna.platform.win32.COM.COMInvoker;
 import com.sun.jna.platform.win32.*;
 import com.sun.jna.ptr.PointerByReference;
 
-import static org.lwjgl.sdl.SDLProperties.SDL_GetPointerProperty;
-import static org.lwjgl.sdl.SDLVideo.SDL_GetWindowProperties;
-import static org.lwjgl.sdl.SDLVideo.SDL_PROP_WINDOW_WIN32_HWND_POINTER;
 
 public class WindowsTaskbar extends COMInvoker implements Taskbar.ITaskbar {
     private final WinDef.HWND hwnd;
@@ -23,8 +20,17 @@ public class WindowsTaskbar extends COMInvoker implements Taskbar.ITaskbar {
         }
 
         this.setPointer(itaskbar3res.getValue());
-        this.hwnd = new WinDef.HWND(new Pointer(SDL_GetPointerProperty(SDL_GetWindowProperties(windowId), SDL_PROP_WINDOW_WIN32_HWND_POINTER, 0)));
+        this.hwnd = new WinDef.HWND(new Pointer(getNativeWindowHandle(windowId)));
         this.invokeNative(3); // HrInit
+    }
+
+    private static long getNativeWindowHandle(long windowId) {
+        try {
+            Class<?> glfwNativeWin32 = Class.forName("org.lwjgl.glfw.GLFWNativeWin32");
+            return (long) glfwNativeWin32.getMethod("glfwGetWin32Window", long.class).invoke(null, windowId);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("Unable to obtain the native Win32 window handle", e);
+        }
     }
 
     private void invokeNative(int ventry, Object... objects) {

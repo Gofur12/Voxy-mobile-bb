@@ -1,7 +1,12 @@
 package me.cortex.voxy.client;
 
 import me.cortex.voxy.client.core.gl.Capabilities;
+import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
+import me.cortex.voxy.client.core.gl.backend.GlBackendProviders;
+import me.cortex.voxy.client.core.gl.backend.GlRendererPath;
+import me.cortex.voxy.client.core.rendering.util.DownloadStream;
 import me.cortex.voxy.client.core.rendering.util.SharedIndexBuffer;
+import me.cortex.voxy.client.core.rendering.util.UploadStream;
 import me.cortex.voxy.common.Logger;
 import me.cortex.voxy.commonImpl.VoxyCommon;
 import net.fabricmc.api.ClientModInitializer;
@@ -21,13 +26,29 @@ public class VoxyClient implements ClientModInitializer {
     private static final HashSet<String> FREX = new HashSet<>();
     private static FileLock EXCLUSIVE_LOCK;
     public static void initVoxyClient() {
-        Capabilities.init();//Ensure clinit is called
+        // Called after RenderSystem.initRenderer returns; the game context is current here.
+        if (!GlBackendRuntime.initialize(GlBackendProviders.discover())) {
+            Logger.error("Voxy is unsupported: no compatible GPU backend is available.");
+            return;
+        }
 
-        if (Capabilities.INSTANCE.hasBrokenDepthSampler) {
+        // Do not enter legacy Voxy initialization for a GLES context merely
+        // because its API version is high enough. Only the desktop MDIC renderer
+        // is implemented in this source tree at present.
+        GlRendererPath rendererPath = GlRendererPath.selectImplemented(
+                GlBackendRuntime.requireBackend().capabilities());
+        if (rendererPath == GlRendererPath.UNSUPPORTED) {
+            Logger.error("Voxy is unsupported: this graphics backend has no implemented renderer path.");
+            return;
+        }
+
+        Capabilities.init();//Capture capabilities for this active graphics context
+
+        if (Capabilities.require().hasBrokenDepthSampler) {
             Logger.error("AMD broken depth sampler detected, voxy does not work correctly and has been disabled, this will hopefully be fixed in the future");
         }
 
-        boolean systemSupported = Capabilities.INSTANCE.compute && Capabilities.INSTANCE.indirectParameters && !Capabilities.INSTANCE.hasBrokenDepthSampler;
+        boolean systemSupported = Capabilities.require().compute && Capabilities.require().indirectParameters && !Capabilities.require().hasBrokenDepthSampler;
         if (!systemSupported) {
              Logger.error("Voxy is unsupported on your system.");
         }
@@ -51,14 +72,78 @@ public class VoxyClient implements ClientModInitializer {
 
         if (systemSupported) {
 
-            SharedIndexBuffer.INSTANCE.id();
+            UploadStream.initialize();
+            DownloadStream.initialize();
+            SharedIndexBuffer.initialize();
 
             VoxyCommon.setInstanceFactory(VoxyClientInstance::new);
 
-            if (!Capabilities.INSTANCE.subgroup) {
+            if (!Capabilities.require().subgroup) {
                 Logger.warn("GPU does not support subgroup operations, expect some performance degradation");
             }
 
+        }
+    }
+
+    /**
+     * Releases Voxy's world instance and backend while Minecraft still owns
+     * the graphics context. Called from the client shutdown hook.
+     */
+    public static void shutdownGraphicsResources() {
+        RuntimeException shutdownFailure = null;
+        try {
+            VoxyCommon.shutdownInstance();
+        } catch (RuntimeException failure) {
+            shutdownFailure = failure;
+            Logger.error("Failed to shut down Voxy instance before graphics teardown", failure);
+        }
+
+        try {
+            SharedIndexBuffer.shutdown();
+        } catch (RuntimeException failure) {
+            if (shutdownFailure != null) shutdownFailure.addSuppressed(failure);
+            else shutdownFailure = failure;
+            Logger.error("Failed to release shared index buffers", failure);
+        }
+
+        try {
+            DownloadStream.shutdown();
+        } catch (RuntimeException failure) {
+            if (shutdownFailure != null) shutdownFailure.addSuppressed(failure);
+            else shutdownFailure = failure;
+            Logger.error("Failed to shut down download stream", failure);
+        }
+
+        try {
+            UploadStream.shutdown();
+        } catch (RuntimeException failure) {
+            if (shutdownFailure != null) shutdownFailure.addSuppressed(failure);
+            else shutdownFailure = failure;
+            Logger.error("Failed to shut down upload stream", failure);
+        }
+
+        try {
+            me.cortex.voxy.client.core.rendering.util.LightMapHelper.shutdown();
+        } catch (RuntimeException failure) {
+            if (shutdownFailure != null) shutdownFailure.addSuppressed(failure);
+            else shutdownFailure = failure;
+            Logger.error("Failed to release lightmap sampler", failure);
+        }
+
+        Capabilities.clear();
+
+        if (GlBackendRuntime.isInitialized()) {
+            try {
+                GlBackendRuntime.shutdown();
+            } catch (RuntimeException failure) {
+                if (shutdownFailure != null) shutdownFailure.addSuppressed(failure);
+                else shutdownFailure = failure;
+                Logger.error("Failed to shut down Voxy graphics backend", failure);
+            }
+        }
+
+        if (shutdownFailure != null) {
+            Logger.error("Voxy graphics shutdown completed with errors");
         }
     }
 

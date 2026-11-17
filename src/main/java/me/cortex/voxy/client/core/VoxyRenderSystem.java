@@ -1,7 +1,5 @@
 package me.cortex.voxy.client.core;
 
-import com.mojang.renderpearl.backend.opengl.GlConst;
-import com.mojang.renderpearl.backend.opengl.GlStateManager;
 import me.cortex.voxy.client.TimingStatistics;
 import me.cortex.voxy.client.VoxyClient;
 import me.cortex.voxy.client.config.VoxyConfig;
@@ -21,6 +19,8 @@ import me.cortex.voxy.client.core.rendering.hierachical.NodeCleaner;
 import me.cortex.voxy.client.core.rendering.section.IUsesMeshlets;
 import me.cortex.voxy.client.core.rendering.section.backend.AbstractSectionRenderer;
 import me.cortex.voxy.client.core.rendering.section.backend.mdic.MDICSectionRenderer;
+import me.cortex.voxy.client.core.gl.backend.GlCapabilities;
+import org.lwjgl.opengl.GL;
 import me.cortex.voxy.client.core.rendering.section.geometry.BasicSectionGeometryData;
 import me.cortex.voxy.client.core.rendering.section.geometry.IGeometryData;
 import me.cortex.voxy.client.core.rendering.util.DownloadStream;
@@ -33,7 +33,6 @@ import me.cortex.voxy.common.thread.ServiceManager;
 import me.cortex.voxy.common.util.GlobalCleaner;
 import me.cortex.voxy.common.world.WorldEngine;
 import me.cortex.voxy.commonImpl.VoxyCommon;
-import net.caffeinemc.mods.sodium.client.util.FogParameters;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
 import org.jetbrains.annotations.Nullable;
@@ -48,6 +47,9 @@ import java.util.List;
 import static org.lwjgl.opengl.ARBDirectStateAccess.glGetTextureLevelParameteri;
 import static org.lwjgl.opengl.GL11.glGetIntegerv;
 import static org.lwjgl.opengl.GL11C.*;
+import static org.lwjgl.opengl.GL13C.GL_TEXTURE0;
+import static org.lwjgl.opengl.GL13C.GL_TEXTURE1;
+import static org.lwjgl.opengl.GL13C.glActiveTexture;
 import static org.lwjgl.opengl.GL30C.*;
 import static org.lwjgl.opengl.GL33.glBindSampler;
 import static org.lwjgl.opengl.GL43.GL_SHADER_STORAGE_BUFFER;
@@ -77,7 +79,41 @@ public class VoxyRenderSystem {
     private final RenderProperties properties;
 
     private static AbstractSectionRenderer.Factory<?,? extends IGeometryData> getRenderBackendFactory() {
-        //TODO: need todo a thing where selects optimal section render based on if supports the pipeline and geometry data type
+        final org.lwjgl.opengl.GLCapabilities gl;
+        try {
+            gl = GL.getCapabilities();
+        } catch (IllegalStateException noCurrentContext) {
+            throw new IllegalStateException("Voxy renderer selection requires a current OpenGL context", noCurrentContext);
+        }
+
+        // This renderer also relies on the desktop GL 4.5 DSA API. Do not
+        // infer compatibility from the device name or from GLES extensions.
+        if (!gl.OpenGL45) {
+            throw new UnsupportedOperationException(
+                    "Voxy MDIC renderer requires desktop OpenGL 4.5; no GLES renderer is available yet"
+            );
+        }
+
+        GlCapabilities capabilities = new GlCapabilities(
+                4, 5, false,
+                gl.GL_ARB_buffer_storage,
+                gl.GL_ARB_buffer_storage,
+                gl.OpenGL43 || gl.GL_ARB_compute_shader,
+                gl.OpenGL43 || gl.GL_ARB_shader_storage_buffer_object,
+                gl.OpenGL42 || gl.GL_ARB_shader_image_load_store,
+                gl.OpenGL43 || gl.GL_ARB_multi_draw_indirect,
+                gl.GL_ARB_indirect_parameters,
+                gl.GL_ARB_texture_view,
+                gl.GL_KHR_shader_subgroup,
+                gl.GL_ARB_gpu_shader_int64,
+                gl.OpenGL32
+        );
+        if (!capabilities.supportsDesktopMdicPath()) {
+            throw new UnsupportedOperationException(
+                    "Voxy MDIC renderer is unavailable: compute, SSBO, image load/store, " +
+                    "multi-draw indirect, or indirect parameters are unsupported"
+            );
+        }
         return MDICSectionRenderer.FACTORY;
     }
 
@@ -86,6 +122,10 @@ public class VoxyRenderSystem {
         // than timeout, we keep the world acquired
         world.acquireRef();
         Logger.info("Creating Voxy render system");
+
+        // Select and validate the renderer before any SSBO state queries or
+        // GPU resource construction can run.
+        var backendFactory = getRenderBackendFactory();
 
         System.gc();
 
@@ -110,7 +150,6 @@ public class VoxyRenderSystem {
 
             this.properties = RenderProperties.getRenderProperties();
             this.visbleSectionStream = new StreamedBoundStore();
-            var backendFactory = getRenderBackendFactory();
             {
                 this.modelService = new ModelBakerySubsystem(world.getMapper());
                 this.renderGen = new RenderGenerationService(world, this.modelService, sm, IUsesMeshlets.class.isAssignableFrom(backendFactory.clz()));
@@ -180,14 +219,14 @@ public class VoxyRenderSystem {
         }
 
         for (int i = 0; i < 12; i++) {
-            GlStateManager._activeTexture(GlConst.GL_TEXTURE0+i);
-            GlStateManager._bindTexture(0);
+            glActiveTexture(GL_TEXTURE0+i);
+            glBindTexture(GL_TEXTURE_2D, 0);
             glBindSampler(i, 0);
         }
     }
 
 
-    public Viewport<?> setupViewport(Matrix4fc vanillaProjection, Matrix4fc modelView, FogParameters fogParameters, int width, int height, double cameraX, double cameraY, double cameraZ) {
+    public Viewport<?> setupViewport(Matrix4fc vanillaProjection, Matrix4fc modelView, Object fogParameters, int width, int height, double cameraX, double cameraY, double cameraZ) {
         var viewport = this.getViewport();
         if (viewport == null) {
             return null;
@@ -240,7 +279,7 @@ public class VoxyRenderSystem {
                 .setModelView(new Matrix4f(modelView))
                 .setCamera(cameraX, cameraY, cameraZ)
                 .setScreenSize(width, height)
-                .setFogParameters(fogParameters)
+                .setFogParameters(VoxyFogParameters.from(fogParameters))
                 .update();
 
         if (VoxyClient.getOcclusionDebugState()==0) {
@@ -277,10 +316,10 @@ public class VoxyRenderSystem {
             oldBufferBindings[i] = glGetIntegeri(GL_SHADER_STORAGE_BUFFER_BINDING, i);
         }
 
-        GlStateManager._enableDepthTest();
-        GlStateManager._depthFunc(this.properties.closerEqualDepthCompare());
-        GlStateManager._depthMask(true);
-        GlStateManager._disablePolygonOffset();
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(this.properties.closerEqualDepthCompare());
+        glDepthMask(true);
+        glDisable(GL_POLYGON_OFFSET_FILL);
 
         int oldFB = GL11.glGetInteger(GL_DRAW_FRAMEBUFFER_BINDING);
 
@@ -330,7 +369,7 @@ public class VoxyRenderSystem {
         //As much dynamic runtime stuff here
         {
             //Tick upload stream (this is ok to do here as upload ticking is just memory management)
-            UploadStream.INSTANCE.tick();
+            UploadStream.requireInstance().tick();
 
             while (this.renderDistanceTracker.setCenterAndProcess(viewport.cameraX, viewport.cameraZ) && VoxyClient.isFrexActive());//While FF is active, run until everything is processed
             TimingStatistics.H.start();
@@ -348,23 +387,23 @@ public class VoxyRenderSystem {
 
         GPUTiming.INSTANCE.tick();
 
-        glBindFramebuffer(GlConst.GL_FRAMEBUFFER, oldFB);
+        glBindFramebuffer(GL_FRAMEBUFFER, oldFB);
         glViewport(dims[0], dims[1], dims[2], dims[3]);
 
         {//Reset state manager stuffs
-            GlStateManager._glUseProgram(0);
             glUseProgram(0);
-            GlStateManager._enableDepthTest();
+            glUseProgram(0);
+            glEnable(GL_DEPTH_TEST);
             glEnable(GL_DEPTH_TEST);
             glDisable(GL_STENCIL_TEST);
 
-            GlStateManager._glBindVertexArray(0);//Clear binding
+            glBindVertexArray(0);//Clear binding
             glBindVertexArray(0);
 
-            GlStateManager._activeTexture(GlConst.GL_TEXTURE1);
+            glActiveTexture(GL_TEXTURE1);
             for (int i = 0; i < 12; i++) {
-                GlStateManager._activeTexture(GlConst.GL_TEXTURE0+i);
-                GlStateManager._bindTexture(0);
+                glActiveTexture(GL_TEXTURE0+i);
+                glBindTexture(GL_TEXTURE_2D, 0);
                 glBindSampler(i, 0);
             }
 
@@ -375,13 +414,13 @@ public class VoxyRenderSystem {
             for (int i = 0; i < oldBufferBindings.length; i++) {
                 glBindBufferBase(GL_SHADER_STORAGE_BUFFER, i, oldBufferBindings[i]);
             }
-            GlStateManager._blendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
+            glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
             glBlendEquation(GL_FUNC_ADD);
-            GlStateManager._blendFuncSeparate(0,0, 0, 0);
+            glBlendFuncSeparate(0,0, 0, 0);
             glBlendFunc(0, 0);
-            GlStateManager._disableBlend(0);
             glDisable(GL_BLEND);
-            GlStateManager._depthFunc(GL_LESS);
+            glDisable(GL_BLEND);
+            glDepthFunc(GL_LESS);
             glDepthFunc(GL_LESS);
 
             //((SodiumShader) Iris.getPipelineManager().getPipelineNullable().getSodiumPrograms().getProgram(DefaultTerrainRenderPasses.CUTOUT).getInterface()).setupState(DefaultTerrainRenderPasses.CUTOUT, fogParameters);
@@ -511,7 +550,7 @@ public class VoxyRenderSystem {
             return false;
         }
         //If frex is running we must tick everything to ensure correctness
-        UploadStream.INSTANCE.tick();
+        UploadStream.requireInstance().tick();
         //Done here as is allows less gl state resetup
         this.modelService.tick(100_000_000);
         GL11.glFinish();
@@ -549,7 +588,7 @@ public class VoxyRenderSystem {
 
     public void shutdown() {
         Logger.info("Flushing download stream");
-        DownloadStream.INSTANCE.flushWaitClear();
+        DownloadStream.requireInstance().flushWaitClear();
         Logger.info("Shutting down rendering");
         try {
             //Cleanup callbacks
@@ -585,7 +624,7 @@ public class VoxyRenderSystem {
 
 
         Logger.info("Flushing download stream");
-        DownloadStream.INSTANCE.flushWaitClear();
+        DownloadStream.requireInstance().flushWaitClear();
 
         //Release hold on the world
         this.worldIn.releaseRef();

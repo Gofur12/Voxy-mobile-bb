@@ -1,6 +1,7 @@
 package me.cortex.voxy.client.core.rendering.util;
 
 import me.cortex.voxy.client.core.gl.GlBuffer;
+import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
 import me.cortex.voxy.common.util.MemoryBuffer;
 import org.lwjgl.system.MemoryUtil;
 
@@ -8,46 +9,182 @@ import org.lwjgl.system.MemoryUtil;
 //Has a base index buffer of 16380 quads, and also a 1 cube byte index buffer at the end
 public class SharedIndexBuffer {
     public static final int CUBE_INDEX_OFFSET = (1<<16)*6*2;
-    public static final SharedIndexBuffer INSTANCE = new SharedIndexBuffer();
-    public static final SharedIndexBuffer INSTANCE_BYTE = new SharedIndexBuffer(true);
-    public static final SharedIndexBuffer INSTANCE_BB_BYTE = new SharedIndexBuffer(true, true);
+    /**
+     * GPU-backed variants are created only after the current graphics backend
+     * is initialized. They are nullable between context lifetimes.
+     */
+    public static volatile SharedIndexBuffer INSTANCE;
+    public static volatile SharedIndexBuffer INSTANCE_BYTE;
+    public static volatile SharedIndexBuffer INSTANCE_BB_BYTE;
 
     private final GlBuffer indexBuffer;
+    private final long contextGeneration;
+
+    /**
+     * Creates the shared index-buffer variants for the active graphics context.
+     * Construction is transactional: partially created buffers are released
+     * and no static reference is published if any variant fails.
+     */
+    public static synchronized void initialize() {
+        GlBackendRuntime.requireBackend();
+        long generation = GlBackendRuntime.getContextGeneration();
+        if (INSTANCE != null && INSTANCE_BYTE != null && INSTANCE_BB_BYTE != null
+                && INSTANCE.contextGeneration == generation
+                && INSTANCE_BYTE.contextGeneration == generation
+                && INSTANCE_BB_BYTE.contextGeneration == generation) {
+            return;
+        }
+
+        shutdown();
+
+        SharedIndexBuffer shortIndices = null;
+        SharedIndexBuffer byteIndices = null;
+        SharedIndexBuffer byteCubeIndices = null;
+        try {
+            shortIndices = new SharedIndexBuffer();
+            byteIndices = new SharedIndexBuffer(true);
+            byteCubeIndices = new SharedIndexBuffer(true, true);
+
+            INSTANCE = shortIndices;
+            INSTANCE_BYTE = byteIndices;
+            INSTANCE_BB_BYTE = byteCubeIndices;
+        } catch (RuntimeException | Error failure) {
+            freeAfterFailedInitialization(byteCubeIndices, failure);
+            freeAfterFailedInitialization(byteIndices, failure);
+            freeAfterFailedInitialization(shortIndices, failure);
+            throw failure;
+        }
+    }
+
+    private static void freeAfterFailedInitialization(SharedIndexBuffer buffer, Throwable failure) {
+        if (buffer == null) return;
+        try {
+            buffer.free();
+        } catch (RuntimeException | Error cleanupFailure) {
+            if (cleanupFailure != failure) failure.addSuppressed(cleanupFailure);
+        }
+    }
+
+    /**
+     * Releases all shared index buffers. Safe after context loss because the
+     * underlying GlBuffer wrapper skips deletion for stale context generations.
+     */
+    public static synchronized void shutdown() {
+        SharedIndexBuffer shortIndices = INSTANCE;
+        SharedIndexBuffer byteIndices = INSTANCE_BYTE;
+        SharedIndexBuffer byteCubeIndices = INSTANCE_BB_BYTE;
+        INSTANCE = null;
+        INSTANCE_BYTE = null;
+        INSTANCE_BB_BYTE = null;
+
+        Throwable failure = null;
+        failure = freeCollecting(shortIndices, failure);
+        if (byteIndices != shortIndices) failure = freeCollecting(byteIndices, failure);
+        if (byteCubeIndices != shortIndices && byteCubeIndices != byteIndices) {
+            failure = freeCollecting(byteCubeIndices, failure);
+        }
+        if (failure instanceof RuntimeException runtimeFailure) throw runtimeFailure;
+        if (failure instanceof Error errorFailure) throw errorFailure;
+    }
+
+    private static Throwable freeCollecting(SharedIndexBuffer buffer, Throwable failure) {
+        if (buffer == null) return failure;
+        try {
+            buffer.free();
+        } catch (RuntimeException | Error cleanupFailure) {
+            if (failure == null) return cleanupFailure;
+            if (cleanupFailure != failure) failure.addSuppressed(cleanupFailure);
+        }
+        return failure;
+    }
 
     public SharedIndexBuffer() {
+        this.contextGeneration = GlBackendRuntime.getContextGeneration();
         this.indexBuffer = new GlBuffer((1<<16)*6*2 + 6*2*3);
-        var quadIndexBuff = generateQuadIndicesShort(16380);
-        var cubeBuff = generateCubeIndexBuffer();
+        MemoryBuffer quadIndexBuff = null;
+        MemoryBuffer cubeBuff = null;
+        try {
+            quadIndexBuff = generateQuadIndicesShort(16380);
+            cubeBuff = generateCubeIndexBuffer();
 
-        long ptr = UploadStream.INSTANCE.upload(this.indexBuffer, 0, this.indexBuffer.size());
-        quadIndexBuff.cpyTo(ptr);
-        cubeBuff.cpyTo((1<<16)*2*6 + ptr);
-
+            long ptr = UploadStream.requireInstance().upload(this.indexBuffer, 0, this.indexBuffer.size());
+            quadIndexBuff.cpyTo(ptr);
+            cubeBuff.cpyTo((1<<16)*2*6 + ptr);
+            UploadStream.requireInstance().commit();
+        } catch (RuntimeException | Error failure) {
+            cleanupConstructionFailure(quadIndexBuff, cubeBuff, failure);
+            try {
+                this.indexBuffer.free();
+            } catch (RuntimeException | Error cleanupFailure) {
+                if (cleanupFailure != failure) failure.addSuppressed(cleanupFailure);
+            }
+            throw failure;
+        }
         quadIndexBuff.free();
         cubeBuff.free();
-        UploadStream.INSTANCE.commit();
     }
 
     private SharedIndexBuffer(boolean type2) {
+        this.contextGeneration = GlBackendRuntime.getContextGeneration();
         this.indexBuffer = new GlBuffer((1<<8)*6 + 6*2*3);
-        var quadIndexBuff = generateQuadIndicesByte(63);
-        var cubeBuff = generateCubeIndexBuffer();
+        MemoryBuffer quadIndexBuff = null;
+        MemoryBuffer cubeBuff = null;
+        try {
+            quadIndexBuff = generateQuadIndicesByte(63);
+            cubeBuff = generateCubeIndexBuffer();
 
-        long ptr = UploadStream.INSTANCE.upload(this.indexBuffer, 0, this.indexBuffer.size());
-        quadIndexBuff.cpyTo(ptr);
-        cubeBuff.cpyTo((1<<8)*6 + ptr);
-
+            long ptr = UploadStream.requireInstance().upload(this.indexBuffer, 0, this.indexBuffer.size());
+            quadIndexBuff.cpyTo(ptr);
+            cubeBuff.cpyTo((1<<8)*6 + ptr);
+            UploadStream.requireInstance().commit();
+        } catch (RuntimeException | Error failure) {
+            cleanupConstructionFailure(quadIndexBuff, cubeBuff, failure);
+            try {
+                this.indexBuffer.free();
+            } catch (RuntimeException | Error cleanupFailure) {
+                if (cleanupFailure != failure) failure.addSuppressed(cleanupFailure);
+            }
+            throw failure;
+        }
         quadIndexBuff.free();
         cubeBuff.free();
     }
 
     private SharedIndexBuffer(boolean type2, boolean type3) {
+        this.contextGeneration = GlBackendRuntime.getContextGeneration();
         this.indexBuffer = new GlBuffer(6*2*3*(256/8));
-        var cubeBuff = generateByteCubesIndexBuffer(256/8);
-
-        cubeBuff.cpyTo(UploadStream.INSTANCE.upload(this.indexBuffer, 0, this.indexBuffer.size()));
-        UploadStream.INSTANCE.commit();
+        MemoryBuffer cubeBuff = null;
+        try {
+            cubeBuff = generateByteCubesIndexBuffer(256/8);
+            cubeBuff.cpyTo(UploadStream.requireInstance().upload(this.indexBuffer, 0, this.indexBuffer.size()));
+            UploadStream.requireInstance().commit();
+        } catch (RuntimeException | Error failure) {
+            cleanupConstructionFailure(cubeBuff, null, failure);
+            try {
+                this.indexBuffer.free();
+            } catch (RuntimeException | Error cleanupFailure) {
+                if (cleanupFailure != failure) failure.addSuppressed(cleanupFailure);
+            }
+            throw failure;
+        }
         cubeBuff.free();
+    }
+
+    private static void cleanupConstructionFailure(MemoryBuffer first, MemoryBuffer second, Throwable failure) {
+        if (first != null) {
+            try {
+                first.free();
+            } catch (RuntimeException | Error cleanupFailure) {
+                if (cleanupFailure != failure) failure.addSuppressed(cleanupFailure);
+            }
+        }
+        if (second != null && second != first) {
+            try {
+                second.free();
+            } catch (RuntimeException | Error cleanupFailure) {
+                if (cleanupFailure != failure) failure.addSuppressed(cleanupFailure);
+            }
+        }
     }
 
     private static MemoryBuffer generateCubeIndexBuffer() {
@@ -221,6 +358,11 @@ public class SharedIndexBuffer {
     }
 
     public int id() {
+        GlBackendRuntime.requireBackend(this.contextGeneration, "SharedIndexBuffer");
         return this.indexBuffer.id;
+    }
+
+    public void free() {
+        this.indexBuffer.free();
     }
 }

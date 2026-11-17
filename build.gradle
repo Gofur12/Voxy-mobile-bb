@@ -1,18 +1,130 @@
 plugins {
-    id 'net.fabricmc.fabric-loom' version "${loom_version}"
+    // Loom 1.14+ separates remapping (<= 1.21.11) from non-remapping (26.1+).
+    // Resolve both plugin markers, then apply only the one matching voxyTarget below.
+    id 'net.fabricmc.fabric-loom' version "${loom_version}" apply false
+    id 'net.fabricmc.fabric-loom-remap' version "${loom_version}" apply false
     id 'maven-publish'
     id "me.champeau.jmh" version "0.7.3"
+}
+
+// Select an isolated Minecraft target without changing the repository defaults.
+def voxyTarget = providers.gradleProperty("voxyTarget").getOrElse("26.3")
+apply plugin: (voxyTarget == "1.20.1" ? "net.fabricmc.fabric-loom-remap" : "net.fabricmc.fabric-loom")
+
+// Keep the modern 26.3 implementation as the default source tree. The 1.20.1
+// profile adds narrowly scoped source replacements for Minecraft API renames.
+if (voxyTarget == "1.20.1") {
+    sourceSets {
+        main {
+            java {
+                srcDir "src/1.20.1/java"
+                exclude { element ->
+                    def mainSourceRoot = file("src/main/java").toPath().toAbsolutePath().normalize()
+                    def candidate = element.file.toPath().toAbsolutePath().normalize()
+                    def isMainTree = candidate.startsWith(mainSourceRoot)
+                    def replacedByLegacySource = [
+                        "me/cortex/voxy/commonImpl/WorldIdentifier.java",
+                        "me/cortex/voxy/common/world/service/VoxelIngestService.java",
+                        "me/cortex/voxy/common/world/other/Mapper.java",
+                        "me/cortex/voxy/client/VoxyCommands.java",
+                        "me/cortex/voxy/common/voxelization/WorldConversionFactory.java",
+                        "me/cortex/voxy/client/core/model/ModelStore.java",
+                        "me/cortex/voxy/client/core/gl/shader/ShaderLoader.java",
+                        "me/cortex/voxy/client/core/rendering/ViewportSelector.java",
+                        "me/cortex/voxy/client/DebugEntries.java",
+                        "me/cortex/voxy/client/VoxyClientInstance.java",
+                        "me/cortex/voxy/client/mixin/sodium/AccessorSodiumWorldRenderer.java",
+                        "me/cortex/voxy/client/mixin/sodium/MixinSodiumWorldRenderer.java",
+                        "me/cortex/voxy/client/mixin/sodium/AccessorChunkTracker.java",
+                        "me/cortex/voxy/client/core/rendering/bounding/ColumnStreamedBoundStore.java",
+                        "me/cortex/voxy/client/mixin/sodium/MixinVisibleChunkCollector.java",
+                        "me/cortex/voxy/client/core/RenderProperties.java",
+                        "me/cortex/voxy/client/core/util/IrisUtil.java",
+                        "me/cortex/voxy/client/mixin/sodium/MixinDefaultChunkRenderer.java",
+                        "me/cortex/voxy/client/mixin/sodium/MixinRenderSectionManager.java",
+                        "me/cortex/voxy/client/mixin/minecraft/MixinClientChunkCache.java",
+                        "me/cortex/voxy/client/mixin/minecraft/MixinClientLevel.java",
+                        "me/cortex/voxy/client/mixin/minecraft/MixinRenderSystem.java",
+                        "me/cortex/voxy/client/mixin/minecraft/session/MixinMinecraft.java",
+                        "me/cortex/voxy/common/Logger.java",
+                        "me/cortex/voxy/client/taskbar/Taskbar.java",
+                        "me/cortex/voxy/commonImpl/importers/WorldImporter.java",
+                        "me/cortex/voxy/commonImpl/importers/DHImporter.java"
+                    ].contains(element.path) || (element.file.isFile() && file("src/1.20.1/java/" + element.path).isFile())
+                    def modernConfigOnly = [
+                        "me/cortex/voxy/client/config/SodiumConfigBuilder.java",
+                        "me/cortex/voxy/client/config/VoxyConfigMenu.java",
+                        "me/cortex/voxy/client/config/ModMenuIntegration.java"
+                    ].contains(element.path)
+                    def optionalModernIntegration = [
+                        "me/cortex/voxy/client/VoxyDebugScreenEntry.java",
+                        "me/cortex/voxy/client/mixin/minecraft/MixinDebugScreenEntryList.java",
+                        "me/cortex/voxy/client/mixin/minecraft/util/MixinGlDebug.java",
+                        "me/cortex/voxy/client/mixin/nvidium/MixinRenderPipeline.java",
+                        "me/cortex/voxy/client/mixin/flashback/MixinFlashbackMeta.java",
+                        "me/cortex/voxy/client/mixin/flashback/MixinFlashbackRecorder.java",
+                        "me/cortex/voxy/commonImpl/mixin/chunky/MixinFabricWorld.java",
+                        "me/cortex/voxy/client/mixin/iris/MixinLevelRenderer.java",
+                        "me/cortex/voxy/client/mixin/iris/MixinIrisRenderingPipeline.java",
+                        "me/cortex/voxy/client/mixin/sodium/MixinFallbackVisibleChunkCollector.java",
+                        "me/cortex/voxy/client/mixin/sodium/MixinRenderRegionManager.java",
+                        // Targets that do not exist on 1.20.1 (LevelExtractor, client.renderer.fog,
+                        // ClientCommonPacketListenerImpl are all post-1.20.1 classes).
+                        "me/cortex/voxy/client/mixin/minecraft/MixinLevelExtractor.java",
+                        "me/cortex/voxy/client/mixin/minecraft/MixinFogRenderer.java",
+                        "me/cortex/voxy/client/mixin/minecraft/util/MixinClientCommonPacketListenerImpl.java",
+                        // Iris DepthTransformer does not exist in Iris 1.7.x (1.20.1); the reverse-Z patch that used it
+                        // is not applied on this target (see the 1.20.1 IrisShaderPatch)
+                        "me/cortex/voxy/client/mixin/iris/DepthTransformerAccessor.java"
+                    ].contains(element.path)
+                    return isMainTree && (replacedByLegacySource || modernConfigOnly || optionalModernIntegration)
+                }
+            }
+        }
+    }
+}
+
+def voxyProfile = [:]
+switch (voxyTarget) {
+    case "26.3":
+        break // Keep gradle.properties as the source of truth for the default target.
+    case "1.20.1":
+        voxyProfile.putAll([
+            minecraft_version: "1.20.1",
+            loader_version: "0.19.2",
+            fabric_api_version: "0.92.8+1.20.1",
+            sodium_version_modrinth: "mc1.20.1-0.5.13-fabric",
+            sodium_extra_allows: "",
+            modmenu_version: "7.2.2",
+            lithium_version: "mc1.20.1-0.11.3-fabric",
+            "runtime.iris_version": "1.7.6+1.20.1",
+            // Optional integrations below are pinned to modern Minecraft releases
+            // in gradle.properties. Do not leak those jars into the 1.20.1 Loom
+            // remapping classpath; add target-compatible versions explicitly later.
+            chunky_version: null,
+            vivecraft_version: null,
+            flashback_version: null,
+            nvidium_version: null,
+            target_java_version: "17"
+        ])
+        break
+    default:
+        throw new GradleException("Unsupported -PvoxyTarget='" + voxyTarget + "'. Supported targets: 26.3, 1.20.1")
+}
+
+def voxyProperty = { String name ->
+    voxyProfile.containsKey(name) ? voxyProfile[name] : project.findProperty(name)
 }
 
 def INCLUDE_OTHER_ARCHS = "true".equalsIgnoreCase(project.findProperty("includeOtherArchs"))
 
 def isInGHA = System.getenv("GITHUB_ACTIONS") == "true"
 
-version = project.mod_version
-group = project.maven_group
+version = voxyProperty("mod_version")
+group = voxyProperty("maven_group")
 
 base {
-    archivesName = project.archives_base_name
+    archivesName = voxyProperty("archives_base_name")
 }
 
 repositories {
@@ -85,26 +197,24 @@ def gitCommitHash = { ->
 
 def buildtime = {System.currentTimeSeconds()}
 
-def findSodiumVersion() {
-    var sodium_entry = (Map.Entry<String,String>)project.properties.find {it.key.contains("sodium_version")}
-    var props = sodium_entry.key.split("\\.");
-    var key = props.last();
-    props = props[0..props.size()-1];
-    String version_str;
-    boolean modrinth_version = key.endsWith("_modrinth");
-    if (modrinth_version) {
-        version_str = (sodium_entry.value=~/[^-]*-([^-]*-?[^-]*)-.*/)[0][1];
-    } else {
-        version_str = sodium_entry.value.split("\\+")[0];
+def findSodiumVersion = { ->
+    String sodiumValue = voxyProperty("sodium_version_modrinth")
+    boolean modrinthVersion = sodiumValue != null
+    if (!modrinthVersion) {
+        sodiumValue = voxyProperty("sodium_version")
     }
-    return [props, modrinth_version, sodium_entry.value, version_str];
+    if (sodiumValue == null) {
+        throw new GradleException("No Sodium version configured for target " + voxyTarget)
+    }
+    String versionStr = modrinthVersion ? (sodiumValue =~ /[^-]*-([^-]*-?[^-]*)-.*/)[0][1] : sodiumValue.split("\\+")[0]
+    return [modrinthVersion ? ["sodium_version", "modrinth"] : ["sodium_version"], modrinthVersion, sodiumValue, versionStr]
 }
 
 processResources {
     String sodium_versions;
     {
         StringBuilder sodium_versions_builder = new StringBuilder("[");
-        var vers = [*project.properties.getOrDefault("sodium_extra_allows", "").split(" ")];
+        var vers = [*(voxyProperty("sodium_extra_allows") ?: "").split(" ")];
         for (String ver : vers) {
             if (!ver.isBlank()) {
                 sodium_versions_builder.append("\"=").append(ver).append("\", ");
@@ -125,7 +235,7 @@ processResources {
     }
     String allowed_mc_version;
     {
-        allowed_mc_version = project.properties.minecraft_version.split("-")[0];
+        allowed_mc_version = voxyProperty("minecraft_version").split("-")[0];
         allowed_mc_version = "[\">=" + allowed_mc_version + "- <=" + allowed_mc_version + "\", \"~" + allowed_mc_version + "\"]";
     }
 
@@ -133,7 +243,8 @@ processResources {
     var hash = gitCommitHash()
     var version = project.version
 
-    def props = ["version": version, "commit": hash, "buildtime": time, "allowed_sodium_versions": sodium_versions, "allowed_mc_version": allowed_mc_version]
+    def access_widener = voxyTarget == "1.20.1" ? "voxy-1.20.1.accesswidener" : "voxy.accesswidener"
+    def props = ["version": version, "commit": hash, "buildtime": time, "allowed_sodium_versions": sodium_versions, "allowed_mc_version": allowed_mc_version, "access_widener": access_widener, "modmenu_entrypoint": voxyTarget == "1.20.1" ? "" : '"me.cortex.voxy.client.config.ModMenuIntegration"', "sodium_config_entrypoint": voxyTarget == "1.20.1" ? "" : '"me.cortex.voxy.client.config.VoxyConfigMenu"', "client_mixin_config": voxyTarget == "1.20.1" ? '"client.voxy.1.20.1.mixins.json"' : '"client.voxy.mixins.json"', "common_mixin_config": voxyTarget == "1.20.1" ? '"common.voxy.1.20.1.mixins.json"' : '"common.voxy.mixins.json"']
 
     for (var prop : props) {
         String value = prop.value;
@@ -145,10 +256,9 @@ processResources {
 
     inputs.properties(props);
     filesMatching("fabric.mod.json") {
-        filter {line->line.replace("\"\${","\${").replace("}\"", "}")};
-        expand(props);
-    }
-}
+        filter { line -> line.replace('"${', '${').replace('}"', '}') }
+        expand(props)
+    }}
 
 
 var dummySodiumProviderGenerator = tasks.register("dummySodiumProviderGenerator", Jar) {
@@ -176,7 +286,31 @@ jar {
 }
 
 loom {
-    accessWidenerPath = file("src/main/resources/voxy.accesswidener")
+    // The main access widener is authored in Mojang's official namespace for 26.3.
+    // Keep the legacy Yarn target on its own named-namespace access widener.
+    accessWidenerPath = file(voxyTarget == "1.20.1" ? "src/main/resources/voxy-1.20.1.accesswidener" : "src/main/resources/voxy.accesswidener")
+}
+
+if (voxyTarget == "1.20.1") {
+    // Stage 90: this target authors @Inject/@Shadow targets in Mojang names, but the game runs in
+    // Fabric intermediary. Without a refmap Mixin cannot resolve them and crashes at startup
+    // ("No refMap loaded"). Force the legacy Mixin AP on and pin the refmap name so the
+    // "refmap" key in client/common.voxy.1.20.1.mixins.json always matches the generated file.
+    // Guarded with hasProperty so a Loom release that drops either property degrades to a warning.
+    loom {
+        mixin { m ->
+            if (m.hasProperty("useLegacyMixinAp")) {
+                m.useLegacyMixinAp = true
+            } else {
+                logger.warn("Loom mixin extension has no 'useLegacyMixinAp'; refmap AP not forced")
+            }
+            if (m.hasProperty("defaultRefmapName")) {
+                m.defaultRefmapName = "voxy-refmap.json"
+            } else {
+                logger.warn("Loom mixin extension has no 'defaultRefmapName'; refmap name not pinned")
+            }
+        }
+    }
 }
 
 def runtimeOnlyMsk = {arg->}
@@ -188,16 +322,16 @@ if (!isInGHA) {
     }
 }
 
-def smartDependency(String property, boolean runtime = false, String maven = null, boolean compile = true) {
+def smartDependency = { String property, boolean runtime = false, String maven = null, boolean compile = true ->
     String ver;
-    if (project.hasProperty("runtime."+property)) {
-        ver = project["runtime."+property];
+    if (voxyProfile.containsKey("runtime."+property) || project.hasProperty("runtime."+property)) {
+        ver = voxyProfile.containsKey("runtime."+property) ? voxyProfile["runtime."+property] : project["runtime."+property];
         runtime = true
-    } else if (project.hasProperty("compileOnly."+property)) {
-        ver = project["compileOnly."+property];
+    } else if (voxyProfile.containsKey("compileOnly."+property) || project.hasProperty("compileOnly."+property)) {
+        ver = voxyProfile.containsKey("compileOnly."+property) ? voxyProfile["compileOnly."+property] : project["compileOnly."+property];
         runtime = false
-    }  else {
-        ver = project[property];
+    } else {
+        ver = voxyProfile.containsKey(property) ? voxyProfile[property] : project.findProperty(property);
     }
 
     if (ver == null) {
@@ -217,7 +351,10 @@ def smartDependency(String property, boolean runtime = false, String maven = nul
         dep = (maven!=null?(maven+":"):"")+ver;
     }
     dependencies {
-        if (compile && runtime) {
+        if (voxyTarget == "1.20.1" && compile) {
+            // Loom's remapping plugin needs mod-aware configurations for mod dependencies.
+            modImplementation(dep)
+        } else if (compile && runtime) {
             implementation(dep)
         } else {
             if (compile) {
@@ -233,24 +370,46 @@ def smartDependency(String property, boolean runtime = false, String maven = nul
 
 dependencies {
     // To change the versions see the gradle.properties file
-    minecraft "com.mojang:minecraft:${project.minecraft_version}"
-    //mappings loom.officialMojangMappings()
-    implementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    minecraft "com.mojang:minecraft:${voxyProperty("minecraft_version")}"
+    if (voxyTarget == "1.20.1") {
+        // The Voxy source is written against Mojang official class and member names.
+        // Keep those names for compilation; the target-specific access widener is isolated.
+        mappings loom.officialMojangMappings()
+    }
+    if (voxyTarget == "1.20.1") {
+        modImplementation "net.fabricmc:fabric-loader:${voxyProperty("loader_version")}"
+    } else {
+        implementation "net.fabricmc:fabric-loader:${voxyProperty("loader_version")}"
+    }
 
 
-    runtimeOnlyMsk(fabricApi.module("fabric-api-base", project.fabric_api_version))
-    runtimeOnlyMsk(fabricApi.module("fabric-rendering-fluids-v1", project.fabric_api_version))
-    runtimeOnlyMsk(fabricApi.module("fabric-resource-loader-v0", project.fabric_api_version))
-    runtimeOnlyMsk(fabricApi.module("fabric-command-api-v2", project.fabric_api_version))
+    runtimeOnlyMsk(fabricApi.module("fabric-api-base", voxyProperty("fabric_api_version")))
+    runtimeOnlyMsk(fabricApi.module("fabric-rendering-fluids-v1", voxyProperty("fabric_api_version")))
+    runtimeOnlyMsk(fabricApi.module("fabric-resource-loader-v0", voxyProperty("fabric_api_version")))
+    runtimeOnlyMsk(fabricApi.module("fabric-command-api-v2", voxyProperty("fabric_api_version")))
 
-    implementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_api_version}";
+    if (voxyTarget == "1.20.1") {
+        // Fabric API ships access wideners in intermediary names; Loom must remap
+        // the mod dependency into this project's official-mappings namespace.
+        modImplementation "net.fabricmc.fabric-api:fabric-api:${voxyProperty("fabric_api_version")}";
+    } else {
+        implementation "net.fabricmc.fabric-api:fabric-api:${voxyProperty("fabric_api_version")}";
+    }
 
     {
         var (_, mr, ver, _2) = findSodiumVersion()
         if (mr) {
-            implementation "maven.modrinth:sodium:${ver}"
+            if (voxyTarget == "1.20.1") {
+                modImplementation "maven.modrinth:sodium:${ver}"
+            } else {
+                implementation "maven.modrinth:sodium:${ver}"
+            }
         } else {
-            implementation "net.caffeinemc:sodium-fabric:${ver}"
+            if (voxyTarget == "1.20.1") {
+                modImplementation "net.caffeinemc:sodium-fabric:${ver}"
+            } else {
+                implementation "net.caffeinemc:sodium-fabric:${ver}"
+            }
         }
     }
 
@@ -283,15 +442,23 @@ dependencies {
     //compileOnly("maven.modrinth:vivecraft:26.1.1-1.3.7-b2-fabric")
 
     //compileOnly("maven.modrinth:flashback:VaqZB1DF")
-    compileOnly("io.github.douira:glsl-transformer:3.0.0-pre3")
+    // GLSL Transformer 3.0.0-pre3 is built for Java 21+, while the 1.20.1
+    // profile targets Java 17. Keep the older Java-17-compatible API on that target.
+    compileOnly("io.github.douira:glsl-transformer:${voxyTarget == "1.20.1" ? "2.0.1" : "3.0.0-pre3"}")
+    // Minecraft 1.20.1 does not expose JSpecify annotations on its compile classpath.
+    compileOnly("org.jspecify:jspecify:1.0.0")
 }
 
 
-def targetJavaVersion = 25
+def targetJavaVersion = Integer.parseInt((voxyProperty("target_java_version") ?: "25").toString())
 tasks.withType(JavaCompile).configureEach {
     it.options.encoding = "UTF-8"
     it.options.release = targetJavaVersion
     it.options.deprecation = true
+    if (voxyTarget == "1.20.1") {
+        // javac stops at 100 errors by default, which hides most of the port work in CI logs.
+        it.options.compilerArgs.addAll(["-Xmaxerrs", "5000", "-Xmaxwarns", "5000"])
+    }
 }
 
 java {

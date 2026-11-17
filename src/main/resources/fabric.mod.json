@@ -21,10 +21,10 @@
       "me.cortex.voxy.client.VoxyClient"
     ],
     "modmenu": [
-      "me.cortex.voxy.client.config.ModMenuIntegration"
+      ${modmenu_entrypoint}
     ],
     "sodium:config_api_user": [
-      "me.cortex.voxy.client.config.VoxyConfigMenu"
+      ${sodium_config_entrypoint}
     ],
     "main": [
       "me.cortex.voxy.commonImpl.VoxyCommon"
@@ -32,10 +32,10 @@
   },
   "mixins": [
     {
-      "config": "client.voxy.mixins.json",
+      "config": "${client_mixin_config}",
       "environment": "client"
     },
-    "common.voxy.mixins.json"
+    "${common_mixin_config}"
   ],
   "depends": {
     "minecraft": "${allowed_mc_version}",
@@ -47,5 +47,5 @@
     "iris": ">=1.12-",
     "voxyworldgenv2": "=2.2.2"
   },
-  "accessWidener": "voxy.accesswidener"
+  "accessWidener": "${access_widener}"
 }

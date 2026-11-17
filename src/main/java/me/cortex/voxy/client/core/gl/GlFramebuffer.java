@@ -1,13 +1,17 @@
 package me.cortex.voxy.client.core.gl;
 
 import me.cortex.voxy.common.util.TrackedObject;
+import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
 
-import static org.lwjgl.opengl.GL45C.*;
+import static org.lwjgl.opengl.GL30.GL_FRAMEBUFFER_COMPLETE;
 
 public class GlFramebuffer extends TrackedObject {
     public final int id;
+    private final long contextGeneration;
     public GlFramebuffer() {
-        this.id = glCreateFramebuffers();
+        var backend = GlBackendRuntime.requireBackend();
+        this.id = backend.createFramebuffer();
+        this.contextGeneration = GlBackendRuntime.getContextGeneration();
     }
 
     public GlFramebuffer bind(int attachment, GlTexture texture) {
@@ -19,34 +23,38 @@ public class GlFramebuffer extends TrackedObject {
     }
 
     public GlFramebuffer bind(int attachment, int texture, int lvl) {
-        glNamedFramebufferTexture(this.id, attachment, texture, lvl);
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlFramebuffer").attachTexture2D(this.id, attachment, texture, lvl);
         return this;
     }
 
     public GlFramebuffer bind(int attachment, GlTexture texture, int lvl) {
-        glNamedFramebufferTexture(this.id, attachment, texture.id, lvl);
+        texture.assertContextCurrent();
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlFramebuffer").attachTexture2D(this.id, attachment, texture.id, lvl);
         return this;
     }
 
     public GlFramebuffer bind(int attachment, GlRenderBuffer buffer) {
-        glNamedFramebufferRenderbuffer(this.id, attachment, GL_RENDERBUFFER, buffer.id);
+        buffer.assertContextCurrent();
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlFramebuffer").attachRenderbuffer(this.id, attachment, buffer.id);
         return this;
     }
 
     public GlFramebuffer setDrawBuffers(int... buffers) {
-        glNamedFramebufferDrawBuffers(this.id, buffers);
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlFramebuffer").setFramebufferDrawBuffers(this.id, buffers);
         return this;
     }
 
     @Override
     public void free() {
         super.free0();
-        glDeleteFramebuffers(this.id);
+        if (GlBackendRuntime.isContextGenerationCurrent(this.contextGeneration)) {
+            GlBackendRuntime.requireBackend(this.contextGeneration, "GlFramebuffer").deleteFramebuffer(this.id);
+        }
     }
 
     public GlFramebuffer verify() {
-        int code;
-        if ((code = glCheckNamedFramebufferStatus(this.id, GL_FRAMEBUFFER)) != GL_FRAMEBUFFER_COMPLETE) {
+        int code = GlBackendRuntime.requireBackend(this.contextGeneration, "GlFramebuffer").getFramebufferStatus(this.id);
+        if (code != GL_FRAMEBUFFER_COMPLETE) {
             throw new IllegalStateException("Framebuffer incomplete with error code: " + code);
         }
         return this;
@@ -54,6 +62,7 @@ public class GlFramebuffer extends TrackedObject {
 
 
     public GlFramebuffer name(String name) {
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlFramebuffer");
         return GlDebug.name(name, this);
     }
 }

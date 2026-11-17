@@ -3,6 +3,7 @@ package me.cortex.voxy.client.core.rendering.util;
 import me.cortex.voxy.client.core.gl.GlFramebuffer;
 import me.cortex.voxy.client.core.gl.GlTexture;
 import me.cortex.voxy.client.core.gl.GlVertexArray;
+import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
 import me.cortex.voxy.client.core.gl.shader.Shader;
 import me.cortex.voxy.client.core.gl.shader.ShaderType;
 import org.lwjgl.opengl.GL11;
@@ -29,6 +30,7 @@ public class HiZBuffer2 {
             .define("OUTPUT_COLOUR")
             .compile();
     private final GlFramebuffer fb = new GlFramebuffer().name("HiZ");
+    private final GlVertexArray emptyVao;
     private final int sampler = glGenSamplers();
     private final int type;
     private GlTexture texture;
@@ -40,6 +42,7 @@ public class HiZBuffer2 {
         this(GL_R32F);
     }
     public HiZBuffer2(int type) {
+        this.emptyVao = new GlVertexArray();
         glNamedFramebufferDrawBuffer(this.fb.id, GL_COLOR_ATTACHMENT0);
         this.type = type;
     }
@@ -83,7 +86,7 @@ public class HiZBuffer2 {
         {//Mip down to initial chain
             int boundFB = GL11.glGetInteger(GL_DRAW_FRAMEBUFFER_BINDING);
 
-            glBindVertexArray(GlVertexArray.STATIC_VAO);
+            this.emptyVao.bind();
             this.hizInitial.bind();
             glBindFramebuffer(GL_FRAMEBUFFER, this.fb.id);
 
@@ -92,7 +95,7 @@ public class HiZBuffer2 {
 
             glBindTextureUnit(0, srcDepthTex);
             glBindSampler(0, this.sampler);
-            glUniform1i(0, 0);
+            GlBackendRuntime.requireBackend().setUniform1i(0, 0);
 
             glViewport(0, 0, this.width, this.height);
 
@@ -109,7 +112,7 @@ public class HiZBuffer2 {
         {//Compute based Mipping
             this.hizMip.bind();
 
-            glUniform2f(0, 1f/this.width, 1f/this.height);
+            GlBackendRuntime.requireBackend().setUniform2f(0, 1f/this.width, 1f/this.height);
             glBindTextureUnit(0, this.texture.id);
             glBindSampler(0, this.sampler);
             for (int i = 1; i < 7; i++) {
@@ -128,8 +131,8 @@ public class HiZBuffer2 {
     }
 
     public void free() {
-        this.fb.free();
-        if (this.texture != null) {
+        this.emptyVao.free();
+        this.fb.free();        if (this.texture != null) {
             this.texture.free();
             this.texture = null;
         }

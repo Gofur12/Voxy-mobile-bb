@@ -1,0 +1,198 @@
+package me.cortex.voxy.client.core.gl.backend;
+
+/**
+ * Backend-neutral entry point for Voxy's GPU operations.
+ *
+ * Implementations own the graphics context and all API-specific calls.
+ * This interface intentionally contains no LWJGL or platform classes so
+ * Android and desktop implementations can be loaded independently.
+ *
+ * Resource handles are backend-owned integers and are valid only for the
+ * lifetime of the creating backend/context.
+ */
+public interface GlBackend extends AutoCloseable {
+    String name();
+
+    GlCapabilities capabilities();
+
+    int createShader(int shaderType);
+
+    void setShaderSource(int shader, String source);
+
+    void compileShader(int shader);
+
+    boolean isShaderCompiled(int shader);
+
+    String getShaderInfoLog(int shader);
+
+    void deleteShader(int shader);
+
+    int createProgram();
+
+    void attachShader(int program, int shader);
+
+    void detachShader(int program, int shader);
+
+    void linkProgram(int program);
+
+    boolean isProgramLinked(int program);
+
+    String getProgramInfoLog(int program);
+
+    void deleteProgram(int program);
+
+    void useProgram(int program);
+
+    /** Sets an integer uniform on the currently bound program. */
+    void setUniform1i(int location, int value);
+
+    /** Sets a two-component floating-point uniform on the currently bound program. */
+    void setUniform2f(int location, float x, float y);
+
+    /**
+     * Creates a buffer of the requested size.
+     *
+     * A zero storageFlags value requests ordinary mutable storage, which can
+     * be implemented with the GLES 3.x buffer-data API. Non-zero flags may
+     * request desktop-only immutable, sparse, or persistent storage and must
+     * be capability-gated by the caller/backend.
+     */
+    int createBuffer(long size, long initialDataAddress, int storageFlags);
+
+    void clearBuffer(int handle, int internalFormat, int format, int type, long dataAddress);
+
+    void clearBufferRange(int handle, int internalFormat, long offset, long size, int format, int type, long dataAddress);
+
+    void pixelStore(int parameter, int value);
+
+    void deleteBuffer(int handle);
+
+    void uploadBuffer(int handle, long offset, long size, long sourceAddress);
+
+    /** Flushes a range written through a non-coherent persistent mapping. */
+    void flushMappedBufferRange(int handle, long offset, long length);
+
+    /** Copies bytes between backend buffer objects without exposing API-specific calls. */
+    void copyBufferSubData(int source, int destination, long sourceOffset, long destinationOffset, long size);
+
+    long mapBufferRange(int handle, long offset, long length, int accessFlags);
+
+    boolean unmapBuffer(int handle);
+
+    long createFence();
+
+    boolean isFenceSignaled(long fence);
+
+    void deleteFence(long fence);
+
+    void bindBuffer(int target, int handle);
+
+    void bindBufferBase(int target, int index, int buffer);
+
+    void bindBufferRange(int target, int index, int buffer, long offset, long size);
+
+    void bindTextureUnit(int unit, int texture);
+
+    void bindSampler(int unit, int sampler);
+
+    int createTexture(int target);
+
+    int createTextureView(int source, int target, int internalFormat,
+                          int minLevel, int levelCount, int minLayer, int layerCount);
+
+    /**
+     * Returns whether this backend can clear the supplied semantic texture format.
+     *
+     * The default is deliberately conservative: a backend must opt in only when
+     * it can perform the clear correctly for the active API/context. This lets
+     * embedded implementations reject unsupported formats before any mip level
+     * is modified.
+     */
+    default boolean supportsTextureClear(GlTextureClearType clearType) {
+        return false;
+    }
+
+    /**
+     * Captures the framebuffer-related state that a temporary-FBO clear fallback
+     * may modify. Implementations must return a complete immutable snapshot.
+     *
+     * The default keeps existing backends source-compatible while explicitly
+     * refusing to advertise a state-preserving fallback they do not implement.
+     */
+    default GlFramebufferClearState captureFramebufferClearState() {
+        throw new UnsupportedOperationException(name() + " does not implement framebuffer-clear state capture");
+    }
+
+    /**
+     * Restores a snapshot produced by {@link #captureFramebufferClearState()}.
+     * Implementations must restore framebuffer bindings, draw/read buffer
+     * selection, scissor state, and color/depth/stencil write masks.
+     */
+    default void restoreFramebufferClearState(GlFramebufferClearState state) {
+        throw new UnsupportedOperationException(name() + " does not implement framebuffer-clear state restoration");
+    }
+
+    /**
+     * Clears one 2D texture mip level to numeric zero using a format-aware semantic clear type.
+     *
+     * Implementations must preserve all caller-visible graphics state changed by the operation.
+     * A backend that uses a temporary framebuffer must restore the previous draw/read framebuffer
+     * bindings, draw-buffer selection, scissor enable/box, and relevant color/depth/stencil write
+     * masks before returning. The operation must not change the current program, viewport, or
+     * texture bindings. Unsupported formats or incomplete temporary framebuffers must fail
+     * explicitly; silently skipping a clear is not permitted.
+     *
+     * The backend owns any temporary framebuffer resources and must keep them scoped to the
+     * active context generation. This contract does not transfer graphics-context ownership.
+     */
+    void clearTextureImage(int handle, int level, GlTextureClearType clearType);
+
+    void allocateTexture2D(int handle, int levels, int internalFormat, int width, int height);
+
+    /** Uploads client-memory pixels into a 2D texture level using the portable bind-based API. */
+    void uploadTexture2D(int handle, int level, int x, int y, int width, int height,
+                         int format, int type, long dataAddress);
+
+    void deleteTexture(int handle);
+
+    int createFramebuffer();
+
+    void attachTexture2D(int framebuffer, int attachment, int texture, int level);
+
+    void attachRenderbuffer(int framebuffer, int attachment, int renderbuffer);
+
+    void setFramebufferDrawBuffers(int framebuffer, int[] buffers);
+
+    int getFramebufferStatus(int framebuffer);
+
+    void deleteFramebuffer(int framebuffer);
+
+    int createRenderbuffer();
+
+    void allocateRenderbuffer(int renderbuffer, int format, int width, int height);
+
+    void deleteRenderbuffer(int renderbuffer);
+
+    int createVertexArray();
+
+    void bindVertexArray(int handle);
+
+    void bindVertexArrayVertexBuffer(int vertexArray, int bindingIndex, int buffer, long offset, int stride);
+
+    void bindVertexArrayElementBuffer(int vertexArray, int buffer);
+
+    void enableVertexArrayAttribute(int vertexArray, int attributeIndex);
+
+    void setVertexArrayIntegerAttributeFormat(int vertexArray, int attributeIndex, int componentCount, int type, int relativeOffset);
+
+    void setVertexArrayFloatAttributeFormat(int vertexArray, int attributeIndex, int componentCount, int type, boolean normalized, int relativeOffset);
+
+    void deleteVertexArray(int handle);
+
+    void memoryBarrier(int barrierFlags);
+
+    void finish();
+
+    @Override
+    void close();
+}

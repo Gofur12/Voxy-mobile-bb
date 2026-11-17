@@ -1,6 +1,9 @@
 package me.cortex.voxy.client.core.gl;
 
 import me.cortex.voxy.common.util.TrackedObject;
+import me.cortex.voxy.client.core.gl.backend.GlBackendRuntime;
+import me.cortex.voxy.client.core.gl.backend.GlBackend;
+import me.cortex.voxy.client.core.gl.backend.GlTextureClearType;
 
 import static org.lwjgl.opengl.GL11.GL_RGBA8;
 import static org.lwjgl.opengl.GL11C.*;
@@ -15,6 +18,7 @@ public class GlTexture extends TrackedObject {
     private int height;
     private int levels;
     private boolean hasAllocated;
+    private final long contextGeneration;
 
     private static int COUNT;
     private static long ESTIMATED_TOTAL_SIZE;
@@ -24,17 +28,15 @@ public class GlTexture extends TrackedObject {
     }
 
     public GlTexture(int type) {
-        this.id = glCreateTextures(type);
+        this.id = GlBackendRuntime.requireBackend().createTexture(type);
+        this.contextGeneration = GlBackendRuntime.getContextGeneration();
         this.type = type;
         COUNT++;
     }
 
-    private GlTexture(int type, boolean useGenTypes) {
-        if (useGenTypes) {
-            this.id = glGenTextures();
-        } else {
-            this.id = glCreateTextures(type);
-        }
+    private GlTexture(int type, int existingId) {
+        this.id = existingId;
+        this.contextGeneration = GlBackendRuntime.getContextGeneration();
         this.type = type;
         COUNT++;
     }
@@ -43,41 +45,57 @@ public class GlTexture extends TrackedObject {
         if (this.hasAllocated) {
             throw new IllegalStateException("Texture already allocated");
         }
-        this.hasAllocated = true;
-
-        this.format = format;
-        if (this.type == GL_TEXTURE_2D) {
-            glTextureStorage2D(this.id, levels, format, width, height);
-            this.width = width;
-            this.height = height;
-            this.levels = levels;
-        } else {
-            throw new IllegalStateException("Unknown texture type");
+        if (this.type != GL_TEXTURE_2D) {
+            throw new IllegalStateException("Only 2D texture storage is supported by this wrapper");
         }
-        ESTIMATED_TOTAL_SIZE += this.getEstimatedSize();
+        if (width <= 0 || height <= 0 || levels <= 0) {
+            throw new IllegalArgumentException("Texture dimensions and mip level count must be positive");
+        }
+        int maxLevels = 32 - Integer.numberOfLeadingZeros(Math.max(width, height));
+        if (levels > maxLevels) {
+            throw new IllegalArgumentException("Mip level count " + levels + " exceeds maximum " + maxLevels);
+        }
+
+        long estimatedSize = this.estimateSize(format, levels, width, height);
+        long updatedEstimatedTotal = Math.addExact(ESTIMATED_TOTAL_SIZE, estimatedSize);
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlTexture").allocateTexture2D(this.id, levels, format, width, height);
+
+        // Publish wrapper state only after backend allocation succeeds.
+        this.format = format;
+        this.width = width;
+        this.height = height;
+        this.levels = levels;
+        this.hasAllocated = true;
+        ESTIMATED_TOTAL_SIZE = updatedEstimatedTotal;
         return this;
     }
 
     public GlTexture createView() {
         this.assertAllocated();
-        var view = new GlTexture(this.type, true);
-        glTextureView(view.id, this.type, this.id, this.format, 0, 1, 0, 1);
-        return view;
+        int viewId = GlBackendRuntime.requireBackend(this.contextGeneration, "GlTexture").createTextureView(
+                this.id, this.type, this.format, 0, 1, 0, 1);
+        return new GlTexture(this.type, viewId);
     }
 
     @Override
     public void free() {
-        if (this.hasAllocated) {
-            ESTIMATED_TOTAL_SIZE -= this.getEstimatedSize();
-        }
-        COUNT--;
+        boolean allocated = this.hasAllocated;
+        long estimatedSize = allocated ? this.getEstimatedSize() : 0L;
         this.hasAllocated = false;
         super.free0();
-        glDeleteTextures(this.id);
+        try {
+            if (GlBackendRuntime.isContextGenerationCurrent(this.contextGeneration)) {
+                GlBackendRuntime.requireBackend(this.contextGeneration, "GlTexture").deleteTexture(this.id);
+            }
+        } finally {
+            COUNT--;
+            if (allocated) ESTIMATED_TOTAL_SIZE -= estimatedSize;
+        }
     }
 
     public GlTexture name(String name) {
         this.assertAllocated();
+        this.assertContextCurrent();
         return GlDebug.name(name, this);
     }
 
@@ -109,27 +127,36 @@ public class GlTexture extends TrackedObject {
             case GL_R32UI -> GL_RED_INTEGER;
             case GL_R32F -> GL_RED;
             case GL_DEPTH_COMPONENT24,GL_DEPTH_COMPONENT32F,GL_DEPTH_COMPONENT32 -> GL_DEPTH_COMPONENT;
-            case GL_DEPTH24_STENCIL8 -> GL_DEPTH_STENCIL;
+            case GL_DEPTH24_STENCIL8, GL_DEPTH32F_STENCIL8 -> GL_DEPTH_STENCIL;
             default -> throw new IllegalStateException("Unknown format");
         };
     }
 
     private long getEstimatedSize() {
         this.assertAllocated();
-        long elemSize = switch (this.format) {
-            case GL_R32UI, GL_RGBA8, GL_DEPTH24_STENCIL8, GL_R32F, GL_RG16F -> 4;
-            case GL_DEPTH_COMPONENT24 -> 4;//TODO: check this is right????
-            case GL_DEPTH_COMPONENT32F -> 4;
-            case GL_DEPTH_COMPONENT32 -> 4;
+        return this.estimateSize(this.format, this.levels, this.width, this.height);
+    }
 
-            default -> throw new IllegalStateException("Unknown element size");
+    private long estimateSize(int format, int levels, int width, int height) {
+        long elemSize = switch (format) {
+            case GL_R32UI, GL_RGBA8, GL_DEPTH24_STENCIL8, GL_R32F, GL_RG16F,
+                    GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT32 -> 4;
+            case GL_DEPTH32F_STENCIL8 -> 8;
+            default -> throw new IllegalStateException("Unknown texture element size for format: " + format);
         };
 
         long size = 0;
-        for (int lvl = 0; lvl < this.levels; lvl++) {
-            size += Math.max((((long)this.width)>>lvl), 1) * Math.max((((long)this.height)>>lvl), 1) * elemSize;
+        for (int lvl = 0; lvl < levels; lvl++) {
+            long levelWidth = Math.max(((long) width) >> lvl, 1L);
+            long levelHeight = Math.max(((long) height) >> lvl, 1L);
+            size = Math.addExact(size, Math.multiplyExact(Math.multiplyExact(levelWidth, levelHeight), elemSize));
         }
         return size;
+    }
+
+    public void assertContextCurrent() {
+        this.assertNotFreed();
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlTexture");
     }
 
     public void assertAllocated() {
@@ -138,18 +165,51 @@ public class GlTexture extends TrackedObject {
         }
     }
 
+    /**
+     * Uploads a rectangular client-memory pixel region into one allocated mip level.
+     * The caller owns the native memory and must keep it valid for the duration of this call.
+     */
+    public GlTexture upload2D(int level, int x, int y, int uploadWidth, int uploadHeight,
+                              int format, int type, long dataAddress) {
+        this.assertAllocated();
+        this.assertContextCurrent();
+        if (this.type != GL_TEXTURE_2D) {
+            throw new IllegalStateException("Only 2D texture uploads are supported by this wrapper");
+        }
+        if (level < 0 || level >= this.levels || x < 0 || y < 0
+                || uploadWidth <= 0 || uploadHeight <= 0 || dataAddress == 0L) {
+            throw new IllegalArgumentException("Invalid texture upload region");
+        }
+        int levelWidth = Math.max(this.width >> level, 1);
+        int levelHeight = Math.max(this.height >> level, 1);
+        if (x > levelWidth - uploadWidth || y > levelHeight - uploadHeight) {
+            throw new IllegalArgumentException("Texture upload region exceeds mip level bounds");
+        }
+        GlBackendRuntime.requireBackend(this.contextGeneration, "GlTexture").uploadTexture2D(
+                this.id, level, x, y, uploadWidth, uploadHeight, format, type, dataAddress);
+        return this;
+    }
+
     public GlTexture zero() {
         this.assertAllocated();
-        int type = switch (this.format) {
-            case GL_R32UI -> GL_UNSIGNED_INT;
-            case GL_RGBA8 -> GL_INT;
-            case GL_R32F,GL_DEPTH_COMPONENT24,GL_DEPTH_COMPONENT32F,GL_DEPTH_COMPONENT32, GL_RG16F -> GL_FLOAT;
-            case GL_DEPTH24_STENCIL8 -> GL_UNSIGNED_INT_24_8;
-            case GL_DEPTH32F_STENCIL8 -> GL_FLOAT_32_UNSIGNED_INT_24_8_REV;
-            default -> throw new IllegalStateException("Unknown format");
+        GlTextureClearType clearType = switch (this.format) {
+            case GL_R32UI -> GlTextureClearType.RED_UNSIGNED_INT;
+            case GL_RGBA8 -> GlTextureClearType.RGBA_FLOAT;
+            case GL_R32F -> GlTextureClearType.RED_FLOAT;
+            case GL_RG16F -> GlTextureClearType.RG_FLOAT;
+            case GL_DEPTH_COMPONENT24, GL_DEPTH_COMPONENT32F, GL_DEPTH_COMPONENT32 -> GlTextureClearType.DEPTH_FLOAT;
+            case GL_DEPTH24_STENCIL8 -> GlTextureClearType.DEPTH_STENCIL_UNSIGNED_INT_24_8;
+            case GL_DEPTH32F_STENCIL8 -> GlTextureClearType.DEPTH_STENCIL_FLOAT32_UNSIGNED_INT_24_8;
+            default -> throw new IllegalStateException("Unknown texture clear format: " + this.format);
         };
+        GlBackend backend = GlBackendRuntime.requireBackend(this.contextGeneration, "GlTexture");
+        if (!backend.supportsTextureClear(clearType)) {
+            throw new UnsupportedOperationException("Active GL backend '" + backend.name()
+                    + "' does not support texture clear type " + clearType
+                    + " for format 0x" + Integer.toHexString(this.format));
+        }
         for (int lvl = 0; lvl < this.levels; lvl++) {
-            nglClearTexImage(this.id, lvl, this.getPixelTransferFormat(), type, 0);
+            backend.clearTextureImage(this.id, lvl, clearType);
         }
         return this;
     }
