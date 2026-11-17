@@ -8,6 +8,8 @@ import org.joml.Vector4f;
 
 import java.util.Arrays;
 
+import org.lwjgl.system.MemoryUtil;
+
 public class SoftwareRasterizer {
     private static final int INTEGER_BITS = 13;//+-512
     private static final int TOTAL_INTEGER_BITS = INTEGER_BITS+1;
@@ -317,9 +319,20 @@ public class SoftwareRasterizer {
 
 
     private void loadTransformPos(Matrix4f transform, long addr, int vert, Vector3f out, Vector3f otherAttributesOut) {
-        this.scratch.setFromAddress(addr+vert*ReuseVertexConsumer.VERTEX_FORMAT_SIZE);
-        otherAttributesOut.setFromAddress(addr+vert*ReuseVertexConsumer.VERTEX_FORMAT_SIZE+3*4);
-        this.scratch.w = 1.0f;
+        // Avoid JOML setFromAddress(): it enters MemUtilUnsafe directly and
+        // can fail Android ART's Matrix4f field-offset validation.
+        long vertexAddress = addr + (long) vert * ReuseVertexConsumer.VERTEX_FORMAT_SIZE;
+        this.scratch.set(
+                MemoryUtil.memGetFloat(vertexAddress),
+                MemoryUtil.memGetFloat(vertexAddress + 4),
+                MemoryUtil.memGetFloat(vertexAddress + 8),
+                1.0f
+        );
+        otherAttributesOut.set(
+                MemoryUtil.memGetFloat(vertexAddress + 12),
+                MemoryUtil.memGetFloat(vertexAddress + 16),
+                MemoryUtil.memGetFloat(vertexAddress + 20)
+        );
         var vec = transform.transformProject(this.scratch);
         if (Math.abs(this.scratch.w-1.0f)>0.000001f)
             throw new IllegalStateException();
