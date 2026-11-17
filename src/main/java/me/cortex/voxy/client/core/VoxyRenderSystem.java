@@ -209,7 +209,7 @@ public class VoxyRenderSystem {
             this.boundOutlineRenderer = new BoundRenderer(this.pipeline);
 
             Logger.info("Voxy render system created with " + this.geometryData.getMaxCapacity() + " geometry capacity, using pipeline '" + this.pipeline.getClass().getSimpleName() + "' with renderer '" + sectionRenderer.getClass().getSimpleName() + "'");
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | Error e) {
             world.releaseRef();//If something goes wrong, we must release the world first
             throw e;
         }
