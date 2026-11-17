@@ -16,7 +16,8 @@ public class ThreadUtils {
             || propertyContains("java.vendor", "android")
             || propertyContains("java.runtime.name", "android")
             || propertyContains("java.vm.name", "dalvik")
-            || propertyContains("java.vm.name", "art");
+            || propertyContains("java.vm.name", "art")
+            || isAndroidClassPresent();
     private static final long SetThreadPriority;
     private static final long SetThreadSelectedCpuSetMasks;
     private static final long schedSetaffinity;
@@ -87,6 +88,15 @@ public class ThreadUtils {
             throw new IllegalStateException("Operation failed");
         }
         return true;
+    }
+
+    private static boolean isAndroidClassPresent() {
+        try {
+            Class.forName("android.os.Build", false, ThreadUtils.class.getClassLoader());
+            return true;
+        } catch (ClassNotFoundException | LinkageError ignored) {
+            return false;
+        }
     }
 
     private static boolean propertyContains(String property, String value) {
