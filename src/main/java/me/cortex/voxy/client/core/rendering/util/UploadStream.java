@@ -125,7 +125,16 @@ public class UploadStream {
             if (allocation == SIZE_LIMIT) {
                 throw new IllegalStateException("CPU upload staging arena is full; commit uploads before allocating more");
             }
-            this.thisFrameAllocations.add(allocation);
+            try {
+                this.thisFrameAllocations.add(allocation);
+            } catch (RuntimeException | Error trackingFailure) {
+                try {
+                    this.allocationArena.free(allocation);
+                } catch (RuntimeException | Error cleanupFailure) {
+                    if (trackingFailure != cleanupFailure) trackingFailure.addSuppressed(cleanupFailure);
+                }
+                throw trackingFailure;
+            }
             return allocation;
         }
 
@@ -147,7 +156,18 @@ public class UploadStream {
                     throw new IllegalStateException("Could not allocate upload segment after waiting for previous frames");
                 }
             }
-            this.thisFrameAllocations.add(this.caddr);
+            try {
+                this.thisFrameAllocations.add(this.caddr);
+            } catch (RuntimeException | Error trackingFailure) {
+                try {
+                    this.allocationArena.free(this.caddr);
+                } catch (RuntimeException | Error cleanupFailure) {
+                    if (trackingFailure != cleanupFailure) trackingFailure.addSuppressed(cleanupFailure);
+                }
+                this.caddr = -1;
+                this.offset = 0;
+                throw trackingFailure;
+            }
             this.offset = size;
             addr = this.caddr;
         } else {
@@ -181,6 +201,11 @@ public class UploadStream {
             GlBackendRuntime.requireBackend().flushMappedBufferRange(this.uploadBuffer.id, this.caddr, this.offset);
         }
         if (this.uploadList.isEmpty()) {
+            // Raw uploads may have allocated and written a segment without
+            // registering a target-copy entry. Close that segment before tick()
+            // fences it so the next frame cannot append into in-flight memory.
+            this.caddr = -1;
+            this.offset = 0;
             return;
         }
         GlBackendRuntime.requireBackend(this.contextGeneration, "UploadStream").memoryBarrier(0x00000200); // GL_BUFFER_UPDATE_BARRIER_BIT
@@ -206,7 +231,20 @@ public class UploadStream {
             return;
         }
         if (!this.thisFrameAllocations.isEmpty()) {
-            this.frames.add(new UploadFrame(new GlFence(), new LongArrayList(this.thisFrameAllocations)));
+            // Keep the allocation list authoritative until the fence and frame
+            // are both enqueued successfully.
+            LongArrayList allocations = new LongArrayList(this.thisFrameAllocations);
+            GlFence fence = new GlFence();
+            try {
+                this.frames.add(new UploadFrame(fence, allocations));
+            } catch (RuntimeException | Error enqueueFailure) {
+                try {
+                    fence.free();
+                } catch (RuntimeException | Error fenceFailure) {
+                    if (enqueueFailure != fenceFailure) enqueueFailure.addSuppressed(fenceFailure);
+                }
+                throw enqueueFailure;
+            }
             this.thisFrameAllocations.clear();
         }
         while (!this.frames.isEmpty()) {
@@ -271,20 +309,42 @@ public class UploadStream {
         this.closed = true;
         Throwable failure = null;
         boolean contextCurrent = GlBackendRuntime.isContextGenerationCurrent(this.contextGeneration);
+        // CPU staging uploads consume the client-memory source synchronously.
+        // Persistent-mapped GPU segments, however, must not be unmapped or
+        // deleted until the owning context confirms that queued work is idle.
+        boolean gpuQuiesced = !this.persistentMapping;
         if (contextCurrent) {
-            try { this.commitForShutdown(); } catch (RuntimeException | Error e) { failure = appendFailure(failure, e); }
-            try { GlBackendRuntime.requireBackend(this.contextGeneration, "UploadStream").finish(); } catch (RuntimeException | Error e) { failure = appendFailure(failure, e); }
+            try {
+                this.commitForShutdown();
+            } catch (RuntimeException | Error e) {
+                failure = appendFailure(failure, e);
+            }
+            if (this.persistentMapping) {
+                try {
+                    GlBackendRuntime.requireBackend(this.contextGeneration, "UploadStream").finish();
+                    gpuQuiesced = true;
+                } catch (RuntimeException | Error e) {
+                    failure = appendFailure(failure, e);
+                }
+            }
         }
-        while (!this.frames.isEmpty()) {
-            try { this.frames.removeFirst().fence.free(); } catch (RuntimeException | Error e) { failure = appendFailure(failure, e); }
+
+        if (gpuQuiesced) {
+            while (!this.frames.isEmpty()) {
+                try { this.frames.removeFirst().fence.free(); } catch (RuntimeException | Error e) { failure = appendFailure(failure, e); }
+            }
+            if (this.uploadBuffer != null) {
+                try { this.uploadBuffer.free(); } catch (RuntimeException | Error e) { failure = appendFailure(failure, e); }
+            }
+        } else {
+            // Context loss or failed finish: discard Java references but never
+            // issue GL deletion against resources that may still be in use.
+            this.frames.clear();
         }
         this.thisFrameAllocations.clear();
         this.uploadList.clear();
         this.caddr = -1;
         this.offset = 0;
-        if (this.uploadBuffer != null) {
-            try { this.uploadBuffer.free(); } catch (RuntimeException | Error e) { failure = appendFailure(failure, e); }
-        }
         if (this.cpuStagingAddress != 0L) MemoryUtil.nmemFree(this.cpuStagingAddress);
         rethrowFailure(failure);
     }
