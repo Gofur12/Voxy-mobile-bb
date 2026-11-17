@@ -203,7 +203,7 @@ public class HierarchicalOcclusionTraverser {
         //MemoryUtil.memPutFloat(ptr, viewport.width); ptr += 4;
         MemoryUtil.memPutInt(ptr, viewport.hiZBuffer.getPackedLevels()); ptr += 4;
 
-        viewport.JomlMemoryUtil.putVector3f(innerTranslation, ptr); ptr += 4*3;
+        JomlMemoryUtil.putVector3f(viewport.innerTranslation, ptr); ptr += 4*3;
 
         //MemoryUtil.memPutFloat(ptr, viewport.height); ptr += 4;
 

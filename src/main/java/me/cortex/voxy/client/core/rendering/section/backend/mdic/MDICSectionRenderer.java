@@ -165,7 +165,7 @@ public class MDICSectionRenderer extends AbstractSectionRenderer<MDICViewport, B
             viewport.frameId &= 0x7fffffff;
         }
         MemoryUtil.memPutInt(ptr, viewport.frameId&0x7fffffff); ptr += 4;
-        viewport.JomlMemoryUtil.putVector3f(innerTranslation, ptr); ptr += 4*3;
+        JomlMemoryUtil.putVector3f(viewport.innerTranslation, ptr); ptr += 4*3;
 
         UploadStream.INSTANCE.commit();
     }
