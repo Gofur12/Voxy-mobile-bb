@@ -1,5 +1,6 @@
 package me.cortex.voxy.client.core.rendering.bounding;
 
+import me.cortex.voxy.client.core.rendering.util.JomlMemoryUtil;
 import me.cortex.voxy.client.core.AbstractRenderPipeline;
 import me.cortex.voxy.client.core.RenderProperties;
 import me.cortex.voxy.client.core.gl.GlBuffer;
@@ -85,7 +86,7 @@ public class BoundRenderer {
             int bx = (int)Math.floor(viewport.cameraX);
             int by = (int)Math.floor(viewport.cameraY);
             int bz = (int)Math.floor(viewport.cameraZ);
-            new Vector3i(bx, by, bz).getToAddress(ptr); ptr += 4*4;
+            JomlMemoryUtil.putVector3i(new Vector3i(bx, by, bz), ptr); ptr += 4*4;
 
             var negInnerBlock = new Vector3f(
                     (float) (viewport.cameraX - bx),
@@ -93,8 +94,8 @@ public class BoundRenderer {
                     (float) (viewport.cameraZ - bz));
 
 
-            negInnerBlock.getToAddress(ptr); ptr += 4*3;
-            viewport.MVP.translate(negInnerBlock.negate(), new Matrix4f()).getToAddress(matPtr);
+            JomlMemoryUtil.putVector3f(negInnerBlock, ptr); ptr += 4*3;
+            JomlMemoryUtil.putMatrix4f(viewport.MVP.translate(negInnerBlock.negate(), new Matrix4f()), matPtr);
             MemoryUtil.memPutFloat(ptr, renderDistanceBlocks); ptr += 4;
         }
         UploadStream.INSTANCE.commit();
