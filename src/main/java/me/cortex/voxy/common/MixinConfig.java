@@ -29,9 +29,9 @@ public class MixinConfig implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixin) {
-        // GPUSelect is Windows-specific (GPUSelectorWindows2 and Win32 thread priority).
-        // Its constructor injection is not present on the Android 1.20.1 runtime.
-        if (mixin.endsWith(".minecraft.util.MixinGPUSelect") && isAndroidRuntime()) {
+        // GPUSelect loads GDI32/Kernel32 and patches Windows driver selection.
+        // Do not apply it on Linux, macOS, Android, or other non-Windows runtimes.
+        if (mixin.endsWith(".minecraft.util.MixinGPUSelect") && !isWindowsRuntime()) {
             return false;
         }
         if (mixin.startsWith(this.mixinPackage)) {
@@ -47,12 +47,8 @@ public class MixinConfig implements IMixinConfigPlugin {
         return true;
     }
 
-    private static boolean isAndroidRuntime() {
-        return propertyContains("os.name", "android")
-                || propertyContains("os.version", "android")
-                || propertyContains("java.vendor", "android")
-                || propertyContains("java.runtime.name", "android")
-                || propertyContains("java.vm.name", "dalvik");
+    private static boolean isWindowsRuntime() {
+        return propertyContains("os.name", "windows");
     }
 
     private static boolean propertyContains(String property, String value) {
