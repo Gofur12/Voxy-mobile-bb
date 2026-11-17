@@ -6,6 +6,7 @@ import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 public class MixinConfig implements IMixinConfigPlugin {
@@ -47,8 +48,15 @@ public class MixinConfig implements IMixinConfigPlugin {
     }
 
     private static boolean isAndroidRuntime() {
-        return System.getProperty("os.version", "").toLowerCase().contains("android")
-                || System.getProperty("java.vendor", "").toLowerCase().contains("android");
+        return propertyContains("os.name", "android")
+                || propertyContains("os.version", "android")
+                || propertyContains("java.vendor", "android")
+                || propertyContains("java.runtime.name", "android")
+                || propertyContains("java.vm.name", "dalvik");
+    }
+
+    private static boolean propertyContains(String property, String value) {
+        return System.getProperty(property, "").toLowerCase(Locale.ROOT).contains(value);
     }
 
     @Override
