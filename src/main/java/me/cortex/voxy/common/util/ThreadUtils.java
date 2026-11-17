@@ -12,6 +12,9 @@ public class ThreadUtils {
     public static final int WIN32_THREAD_MODE_BACKGROUND_END = 0x00020000;
     public static final boolean isWindows = Platform.get() == Platform.WINDOWS;
     public static final boolean isLinux = Platform.get() == Platform.LINUX;
+    public static final boolean isAndroid = propertyContains("os.name", "android")
+            || propertyContains("java.runtime.name", "android")
+            || propertyContains("java.vm.name", "dalvik");
     private static final long SetThreadPriority;
     private static final long SetThreadSelectedCpuSetMasks;
     private static final long schedSetaffinity;
@@ -24,13 +27,13 @@ public class ThreadUtils {
             SetThreadSelectedCpuSetMasks = 0;
         }
 
-        if (Platform.get() == Platform.LINUX) {
+        if (Platform.get() == Platform.LINUX && !isAndroid) {
             long fn = 0;
             try {
                 var libc = APIUtil.apiCreateLibrary("libc.so.6");
                 fn = APIUtil.apiGetFunctionAddress(libc, "sched_setaffinity");
-            } catch (Exception e) {
-                Logger.error(e);
+            } catch (Exception | LinkageError e) {
+                Logger.error("Unable to resolve Linux sched_setaffinity; CPU affinity will be disabled", e);
             }
             schedSetaffinity = fn;
         } else {
@@ -84,8 +87,12 @@ public class ThreadUtils {
         return true;
     }
 
+    private static boolean propertyContains(String property, String value) {
+        return System.getProperty(property, "").toLowerCase(java.util.Locale.ROOT).contains(value);
+    }
+
     public static boolean schedSetaffinityLinux(long masks[]) {
-        if (schedSetaffinity == 0 || isWindows) {
+        if (schedSetaffinity == 0 || isWindows || isAndroid) {
             return false;
         }
         try (var stack = MemoryStack.stackPush()) {
