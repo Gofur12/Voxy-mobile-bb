@@ -129,13 +129,8 @@ public class VoxyRenderSystem {
     }
 
     public VoxyRenderSystem(WorldEngine world, ServiceManager sm) {
-        //Keep the world loaded, NOTE: this is done FIRST, to keep and ensure that even if the rest of loading takes more
-        // than timeout, we keep the world acquired
-        world.acquireRef();
-        Logger.info("Creating Voxy render system");
-
-        // Select and validate the renderer before any SSBO state queries or
-        // GPU resource construction can run.
+        // Validate the renderer before acquiring the world or touching GL resources.
+        // Unsupported contexts must not leave an acquired world reference behind.
         var backendFactory = getRenderBackendFactory();
 
         System.gc();
@@ -151,6 +146,11 @@ public class VoxyRenderSystem {
         for (int i = 0; i < oldBufferBindings.length; i++) {
             oldBufferBindings[i] = glGetIntegeri(GL_SHADER_STORAGE_BUFFER_BINDING, i);
         }
+
+        // Keep the world alive for the resource-construction phase. Acquire only
+        // after renderer validation and all preflight GL queries have succeeded.
+        world.acquireRef();
+        Logger.info("Creating Voxy render system");
 
         try {
             //wait for opengl to be finished, this should hopefully ensure all memory allocations are free
