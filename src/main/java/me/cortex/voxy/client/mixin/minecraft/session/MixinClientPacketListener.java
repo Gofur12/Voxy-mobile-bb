@@ -10,7 +10,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 @Mixin(ClientPacketListener.class)
 public class MixinClientPacketListener {
-    @Inject(method = "handleLogin", at = @At(value = "INVOKE", target = "Lnet/minecraft/network/protocol/game/ClientboundLoginPacket;commonPlayerSpawnInfo()Lnet/minecraft/network/protocol/game/CommonPlayerSpawnInfo;"))
+    // The packet's spawn-info accessor differs across Minecraft versions.
+    // Running at TAIL is stable for both the legacy 1.20.1 packet and newer targets.
+    @Inject(method = "handleLogin", at = @At("TAIL"))
     private void voxy$init(ClientboundLoginPacket packet, CallbackInfo ci) {
         if (!ClientSessionEvents.inSession) {
             ClientSessionEvents.sessionStart();
