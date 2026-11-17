@@ -17,7 +17,7 @@ public class MixinMinecraft {
         VoxyClient.initVoxyClient();
     }
 
-    @Inject(method = "disconnect(Lnet/minecraft/client/gui/screens/Screen;)V", at = @At("TAIL"))
+    @Inject(method = "method_18096", at = @At("TAIL"), remap = false)
     private void voxy$injectWorldClose(CallbackInfo ci) {
         if (ClientSessionEvents.inSession) {
             ClientSessionEvents.sessionEnd();
