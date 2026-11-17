@@ -76,7 +76,7 @@ public final class VoxyConfigScreen extends Screen {
 
         addSlider(left, controlX, controlWidth, "Render distance", 10, 1024,
                 Math.max(10, Math.min(1024, config.sectionRenderDistance * 16.0)), value -> {
-                    config.sectionRenderDistance = (float) value / 16.0f;
+                    config.sectionRenderDistance = value.floatValue() / 16.0f;
                     save();
                     var renderer = IVoxyRenderSystemHolder.getNullable();
                     if (renderer != null) renderer.setRenderDistance(config.sectionRenderDistance);
@@ -84,7 +84,7 @@ public final class VoxyConfigScreen extends Screen {
 
         addSlider(left, controlX, controlWidth, "Subdivision size", 28, 256,
                 Math.max(28, Math.min(256, config.subDivisionSize)), value -> {
-                    config.subDivisionSize = (float) value;
+                    config.subDivisionSize = value.floatValue();
                     save();
                 }, value -> Integer.toString((int) Math.round(value)));
 
