@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /** Minecraft 1.20.1 variant: RenderSystem.initRenderer(int, boolean), no RenderPearl GpuDevice. */
 @Mixin(RenderSystem.class)
 public class MixinRenderSystem {
-    @Inject(method = "initRenderer", order = 900, remap = false, at = @At("RETURN"))
+    @Inject(method = "initRenderer(IZ)V", order = 900, at = @At("RETURN"))
     private static void voxy$injectInit(int debugVerbosity, boolean synchronous, CallbackInfo ci) {
         VoxyClient.initVoxyClient();
     }
