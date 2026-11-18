@@ -67,6 +67,7 @@ if (voxyTarget == "1.20.1") {
                         "me/cortex/voxy/client/mixin/iris/MixinLevelRenderer.java",
                         "me/cortex/voxy/client/mixin/iris/MixinIrisRenderingPipeline.java",
                         "me/cortex/voxy/client/mixin/sodium/MixinFallbackVisibleChunkCollector.java",
+                        "me/cortex/voxy/client/mixin/sodium/MixinChunkJobQueue.java",
                         "me/cortex/voxy/client/mixin/sodium/MixinRenderRegionManager.java",
                         // Targets that do not exist on 1.20.1 (LevelExtractor, client.renderer.fog,
                         // ClientCommonPacketListenerImpl are all post-1.20.1 classes).
