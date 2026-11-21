@@ -68,7 +68,16 @@ public class RawDownloadStream {
                 throw new IllegalStateException("Unable to free enough memory for raw download stream");
             }
         }
-        this.frameFragments.add(new DownloadFragment(allocation, size, callback));
+        try {
+            this.frameFragments.add(new DownloadFragment(allocation, size, callback));
+        } catch (RuntimeException | Error trackingFailure) {
+            try {
+                this.allocationArena.free(allocation);
+            } catch (RuntimeException | Error cleanupFailure) {
+                if (trackingFailure != cleanupFailure) trackingFailure.addSuppressed(cleanupFailure);
+            }
+            throw trackingFailure;
+        }
         return allocation;
     }
 
@@ -76,9 +85,21 @@ public class RawDownloadStream {
     public void submit() {
         this.requireCurrentContext();
         if (!this.frameFragments.isEmpty()) {
+            // Keep the source fragments owned by this stream until both the
+            // fence and its frame have been created successfully.
             DownloadFragment[] fragments = this.frameFragments.toArray(new DownloadFragment[0]);
+            GlFence fence = new GlFence();
+            try {
+                this.frames.add(new DownloadFrame(fence, fragments));
+            } catch (RuntimeException | Error enqueueFailure) {
+                try {
+                    fence.free();
+                } catch (RuntimeException | Error fenceFailure) {
+                    if (enqueueFailure != fenceFailure) enqueueFailure.addSuppressed(fenceFailure);
+                }
+                throw enqueueFailure;
+            }
             this.frameFragments.clear();
-            this.frames.add(new DownloadFrame(new GlFence(), fragments));
         }
     }
 
@@ -178,51 +199,77 @@ public class RawDownloadStream {
         if (this.closed) return;
         Throwable failure = null;
         boolean contextCurrent = GlBackendRuntime.isContextGenerationCurrent(this.contextGeneration);
+        boolean gpuQuiesced = false;
+
         if (contextCurrent) {
             try {
                 this.submit();
+            } catch (RuntimeException | Error submitFailure) {
+                failure = appendFailure(failure, submitFailure);
+            }
+            try {
                 GlBackendRuntime.requireBackend(this.contextGeneration, "RawDownloadStream").finish();
-                this.tick();
-            } catch (RuntimeException | Error callbackOrFlushFailure) {
-                failure = appendFailure(failure, callbackOrFlushFailure);
+                gpuQuiesced = true;
+            } catch (RuntimeException | Error finishFailure) {
+                failure = appendFailure(failure, finishFailure);
+            }
+            if (gpuQuiesced) {
+                try {
+                    this.tick();
+                } catch (RuntimeException | Error callbackFailure) {
+                    failure = appendFailure(failure, callbackFailure);
+                }
             }
         }
 
         this.closed = true;
-        // If the context was lost, callbacks cannot safely consume GPU data.
-        // In either shutdown path, release all arena slots and fence wrappers.
-        for (DownloadFragment fragment : this.frameFragments) {
-            try {
-                this.allocationArena.free(fragment.allocation);
-            } catch (RuntimeException | Error cleanupFailure) {
-                failure = appendFailure(failure, cleanupFailure);
-            }
-        }
-        this.frameFragments.clear();
-        while (!this.frames.isEmpty()) {
-            DownloadFrame frame = this.frames.removeFirst();
-            for (DownloadFragment fragment : frame.fragments) {
+        if (gpuQuiesced) {
+            // A successful finish also makes unsubmitted fragment allocations safe to retire.
+            for (DownloadFragment fragment : this.frameFragments) {
                 try {
                     this.allocationArena.free(fragment.allocation);
                 } catch (RuntimeException | Error cleanupFailure) {
                     failure = appendFailure(failure, cleanupFailure);
                 }
             }
-            try {
-                frame.fence.free();
-            } catch (RuntimeException | Error cleanupFailure) {
-                failure = appendFailure(failure, cleanupFailure);
-            }
         }
-
-        try {
-            if (this.persistentMapping) {
-                this.persistentBuffer.free();
-            } else {
-                this.cpuReadbackBuffer.free();
+        // Drop callback references even when the context is lost or GPU completion cannot be established.
+        this.frameFragments.clear();
+        if (gpuQuiesced) {
+            // A successful finish makes all remaining arena allocations and
+            // fences safe to retire, including frames left by a failed tick.
+            while (!this.frames.isEmpty()) {
+                DownloadFrame frame = this.frames.removeFirst();
+                for (DownloadFragment fragment : frame.fragments) {
+                    try {
+                        this.allocationArena.free(fragment.allocation);
+                    } catch (RuntimeException | Error cleanupFailure) {
+                        failure = appendFailure(failure, cleanupFailure);
+                    }
+                }
+                try {
+                    frame.fence.free();
+                } catch (RuntimeException | Error fenceFailure) {
+                    failure = appendFailure(failure, fenceFailure);
+                }
             }
-        } catch (RuntimeException | Error cleanupFailure) {
-            failure = appendFailure(failure, cleanupFailure);
+            if (this.persistentMapping) {
+                try {
+                    this.persistentBuffer.free();
+                } catch (RuntimeException | Error bufferFailure) {
+                    failure = appendFailure(failure, bufferFailure);
+                }
+            } else {
+                try {
+                    this.cpuReadbackBuffer.free();
+                } catch (RuntimeException | Error bufferFailure) {
+                    failure = appendFailure(failure, bufferFailure);
+                }
+            }
+        } else {
+            // Do not issue GL deletion after context loss or failed glFinish:
+            // GPU use of the buffer/fences cannot be proven complete.
+            this.frames.clear();
         }
         rethrowFailure(failure);
     }

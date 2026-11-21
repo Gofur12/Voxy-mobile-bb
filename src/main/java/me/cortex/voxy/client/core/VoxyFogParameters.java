@@ -12,8 +12,13 @@ public record VoxyFogParameters(
         float blue,
         float alpha
 ) {
+    /** Safe fallback for render hooks that run before Sodium has published fog state. */
+    public static final VoxyFogParameters NO_FOG = new VoxyFogParameters(
+            0.0f, Float.MAX_VALUE, 0.0f, 0.0f, 0.0f, 0.0f
+    );
+
     public static VoxyFogParameters from(Object source) {
-        if (source == null) return null;
+        if (source == null) return NO_FOG;
         if (source instanceof VoxyFogParameters fog) return fog;
         try {
             Class<?> type = source.getClass();

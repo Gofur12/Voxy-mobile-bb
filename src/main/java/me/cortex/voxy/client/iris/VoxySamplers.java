@@ -7,7 +7,10 @@ import net.irisshaders.iris.pipeline.IrisRenderingPipeline;
 
 public class VoxySamplers {
     public static void addSamplers(IrisRenderingPipeline pipeline, SamplerHolder samplers) {
-        var patchData = ((IGetVoxyPatchData)pipeline).voxy$getPatchData();
+        if (!(pipeline instanceof IGetVoxyPatchData patchAccess)) {
+            return;
+        }
+        var patchData = patchAccess.voxy$getPatchData();
         if (patchData != null) {
             String[] opaqueNames = new String[]{"vxDepthTexOpaque"};
             String[] translucentNames = new String[]{"vxDepthTexTrans"};
@@ -19,7 +22,10 @@ public class VoxySamplers {
 
             //TODO replace ()->0 with the actual depth texture id
             samplers.addDynamicSampler(TextureType.TEXTURE_2D, () -> {
-                var pipeData = ((IGetIrisVoxyPipelineData)pipeline).voxy$getPipelineData();
+                if (!(pipeline instanceof IGetIrisVoxyPipelineData pipelineDataAccess)) {
+                    return 0;
+                }
+                var pipeData = pipelineDataAccess.voxy$getPipelineData();
                 if (pipeData == null) {
                     return 0;
                 }

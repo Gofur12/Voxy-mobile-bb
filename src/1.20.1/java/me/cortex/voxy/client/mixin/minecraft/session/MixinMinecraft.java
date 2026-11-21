@@ -11,7 +11,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /** Minecraft 1.20.1 variant: no RenderPearl backend wrapper, disconnect(Screen) signature. */
 @Mixin(Minecraft.class)
 public class MixinMinecraft {
-    @Inject(method = "disconnect(Lnet/minecraft/client/gui/screens/Screen;)V", at = @At("TAIL"))
+    // Minecraft 1.20.1 has no RenderSystem.initRenderer(GpuDevice); initialize once the client loop starts with its GL context active.
+    @Inject(method = "run", at = @At("HEAD"))
+    private void voxy$initGraphics(CallbackInfo ci) {
+        VoxyClient.initVoxyClient();
+    }
+
+    @Inject(method = "method_18096", at = @At("TAIL"), remap = false)
     private void voxy$injectWorldClose(CallbackInfo ci) {
         if (ClientSessionEvents.inSession) {
             ClientSessionEvents.sessionEnd();

@@ -8,13 +8,13 @@ import org.lwjgl.opengl.GL;
 public final class DesktopGlBackendProvider implements GlBackendProvider {
     @Override
     public String id() {
-        return "desktop-opengl-45";
+        return "desktop-opengl-46";
     }
 
     @Override
     public GlBackend createIfSupported() {
         try {
-            if (!GL.getCapabilities().OpenGL45) {
+            if (!GL.getCapabilities().OpenGL46) {
                 return null;
             }
             return new DesktopGlBackend();

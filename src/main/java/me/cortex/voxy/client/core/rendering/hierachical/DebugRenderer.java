@@ -1,5 +1,6 @@
 package me.cortex.voxy.client.core.rendering.hierachical;
 
+import me.cortex.voxy.client.core.rendering.util.JomlMemoryUtil;
 import me.cortex.voxy.client.core.gl.GlBuffer;
 import me.cortex.voxy.client.core.gl.GlVertexArray;
 import me.cortex.voxy.client.core.gl.shader.Shader;
@@ -43,7 +44,7 @@ public class DebugRenderer {
         int sy = Mth.floor(viewport.cameraY)>>5;
         int sz = Mth.floor(viewport.cameraZ)>>5;
 
-        new Matrix4f(viewport.projection).mul(viewport.modelView).getToAddress(ptr); ptr += 4*4*4;
+        JomlMemoryUtil.putMatrix4f(new Matrix4f(viewport.projection).mul(viewport.modelView), ptr); ptr += 4*4*4;
 
         MemoryUtil.memPutInt(ptr, sx); ptr += 4;
         MemoryUtil.memPutInt(ptr, sy); ptr += 4;
@@ -51,7 +52,7 @@ public class DebugRenderer {
         MemoryUtil.memPutInt(ptr, viewport.width); ptr += 4;
 
         var innerTranslation = new Vector3f((float) (viewport.cameraX-(sx<<5)), (float) (viewport.cameraY-(sy<<5)), (float) (viewport.cameraZ-(sz<<5)));
-        innerTranslation.getToAddress(ptr); ptr += 4*3;
+        JomlMemoryUtil.putVector3f(innerTranslation, ptr); ptr += 4*3;
 
         MemoryUtil.memPutInt(ptr, viewport.height); ptr += 4;
     }

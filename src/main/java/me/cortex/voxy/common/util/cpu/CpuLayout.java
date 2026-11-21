@@ -130,7 +130,11 @@ public class CpuLayout {
     static {
         Core[] cores = null;
         try {
-            if (Platform.get() == Platform.WINDOWS) {
+            // Android reports a Linux-like platform to LWJGL, but OSHI's
+            // desktop Linux CPU topology/JNA path is not a safe Android probe.
+            if (ThreadUtils.isAndroid) {
+                cores = null;
+            } else if (Platform.get() == Platform.WINDOWS) {
                 cores = generateCoreLayoutWindows();
             } else if (Platform.get() == Platform.LINUX) {
                 cores = generateCoreLayoutLinux();

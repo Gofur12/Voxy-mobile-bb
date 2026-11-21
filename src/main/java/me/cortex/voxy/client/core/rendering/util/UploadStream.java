@@ -80,8 +80,13 @@ public class UploadStream {
     }
 
     public long upload(GlBuffer buffer, long destOffset, long size) {
-        if (size < 0 || size > Integer.MAX_VALUE) {
+        this.requireCurrentContext();
+        buffer.assertContextCurrent();
+        if (size <= 0 || size > Integer.MAX_VALUE) {
             throw new IllegalArgumentException("Upload size is outside the supported range");
+        }
+        if (destOffset < 0 || destOffset > buffer.size() || size > buffer.size() - destOffset) {
+            throw new IllegalArgumentException("Upload destination range is outside the target buffer");
         }
         long uploadOffset = this.rawUploadAddress((int) size);
         this.uploadList.add(new UploadData(buffer, uploadOffset, destOffset, size));
@@ -125,7 +130,16 @@ public class UploadStream {
             if (allocation == SIZE_LIMIT) {
                 throw new IllegalStateException("CPU upload staging arena is full; commit uploads before allocating more");
             }
-            this.thisFrameAllocations.add(allocation);
+            try {
+                this.thisFrameAllocations.add(allocation);
+            } catch (RuntimeException | Error trackingFailure) {
+                try {
+                    this.allocationArena.free(allocation);
+                } catch (RuntimeException | Error cleanupFailure) {
+                    if (trackingFailure != cleanupFailure) trackingFailure.addSuppressed(cleanupFailure);
+                }
+                throw trackingFailure;
+            }
             return allocation;
         }
 
@@ -137,6 +151,12 @@ public class UploadStream {
             this.caddr = this.allocationArena.alloc(size);
             if (this.caddr == SIZE_LIMIT) {
                 Logger.error("Upload stream full, preemptively waiting for old upload frames");
+
+                // Submit queued copies before fencing their source allocations.
+                // Otherwise tick(false) could retire mapped ranges while a later
+                // commit still needs to copy from those ranges.
+                this.commit();
+
                 int attempts = 10;
                 while (--attempts != 0 && this.caddr == SIZE_LIMIT) {
                     GlBackendRuntime.requireBackend(this.contextGeneration, "UploadStream").finish();
@@ -147,7 +167,18 @@ public class UploadStream {
                     throw new IllegalStateException("Could not allocate upload segment after waiting for previous frames");
                 }
             }
-            this.thisFrameAllocations.add(this.caddr);
+            try {
+                this.thisFrameAllocations.add(this.caddr);
+            } catch (RuntimeException | Error trackingFailure) {
+                try {
+                    this.allocationArena.free(this.caddr);
+                } catch (RuntimeException | Error cleanupFailure) {
+                    if (trackingFailure != cleanupFailure) trackingFailure.addSuppressed(cleanupFailure);
+                }
+                this.caddr = -1;
+                this.offset = 0;
+                throw trackingFailure;
+            }
             this.offset = size;
             addr = this.caddr;
         } else {
@@ -181,6 +212,11 @@ public class UploadStream {
             GlBackendRuntime.requireBackend().flushMappedBufferRange(this.uploadBuffer.id, this.caddr, this.offset);
         }
         if (this.uploadList.isEmpty()) {
+            // Raw uploads may have allocated and written a segment without
+            // registering a target-copy entry. Close that segment before tick()
+            // fences it so the next frame cannot append into in-flight memory.
+            this.caddr = -1;
+            this.offset = 0;
             return;
         }
         GlBackendRuntime.requireBackend(this.contextGeneration, "UploadStream").memoryBarrier(0x00000200); // GL_BUFFER_UPDATE_BARRIER_BIT
@@ -206,7 +242,20 @@ public class UploadStream {
             return;
         }
         if (!this.thisFrameAllocations.isEmpty()) {
-            this.frames.add(new UploadFrame(new GlFence(), new LongArrayList(this.thisFrameAllocations)));
+            // Keep the allocation list authoritative until the fence and frame
+            // are both enqueued successfully.
+            LongArrayList allocations = new LongArrayList(this.thisFrameAllocations);
+            GlFence fence = new GlFence();
+            try {
+                this.frames.add(new UploadFrame(fence, allocations));
+            } catch (RuntimeException | Error enqueueFailure) {
+                try {
+                    fence.free();
+                } catch (RuntimeException | Error fenceFailure) {
+                    if (enqueueFailure != fenceFailure) enqueueFailure.addSuppressed(fenceFailure);
+                }
+                throw enqueueFailure;
+            }
             this.thisFrameAllocations.clear();
         }
         while (!this.frames.isEmpty()) {
@@ -271,20 +320,42 @@ public class UploadStream {
         this.closed = true;
         Throwable failure = null;
         boolean contextCurrent = GlBackendRuntime.isContextGenerationCurrent(this.contextGeneration);
+        // CPU staging uploads consume the client-memory source synchronously.
+        // Persistent-mapped GPU segments, however, must not be unmapped or
+        // deleted until the owning context confirms that queued work is idle.
+        boolean gpuQuiesced = !this.persistentMapping;
         if (contextCurrent) {
-            try { this.commitForShutdown(); } catch (RuntimeException | Error e) { failure = appendFailure(failure, e); }
-            try { GlBackendRuntime.requireBackend(this.contextGeneration, "UploadStream").finish(); } catch (RuntimeException | Error e) { failure = appendFailure(failure, e); }
+            try {
+                this.commitForShutdown();
+            } catch (RuntimeException | Error e) {
+                failure = appendFailure(failure, e);
+            }
+            if (this.persistentMapping) {
+                try {
+                    GlBackendRuntime.requireBackend(this.contextGeneration, "UploadStream").finish();
+                    gpuQuiesced = true;
+                } catch (RuntimeException | Error e) {
+                    failure = appendFailure(failure, e);
+                }
+            }
         }
-        while (!this.frames.isEmpty()) {
-            try { this.frames.removeFirst().fence.free(); } catch (RuntimeException | Error e) { failure = appendFailure(failure, e); }
+
+        if (gpuQuiesced) {
+            while (!this.frames.isEmpty()) {
+                try { this.frames.removeFirst().fence.free(); } catch (RuntimeException | Error e) { failure = appendFailure(failure, e); }
+            }
+            if (this.uploadBuffer != null) {
+                try { this.uploadBuffer.free(); } catch (RuntimeException | Error e) { failure = appendFailure(failure, e); }
+            }
+        } else {
+            // Context loss or failed finish: discard Java references but never
+            // issue GL deletion against resources that may still be in use.
+            this.frames.clear();
         }
         this.thisFrameAllocations.clear();
         this.uploadList.clear();
         this.caddr = -1;
         this.offset = 0;
-        if (this.uploadBuffer != null) {
-            try { this.uploadBuffer.free(); } catch (RuntimeException | Error e) { failure = appendFailure(failure, e); }
-        }
         if (this.cpuStagingAddress != 0L) MemoryUtil.nmemFree(this.cpuStagingAddress);
         rethrowFailure(failure);
     }
@@ -314,11 +385,24 @@ public class UploadStream {
     }
 
     public static long alignUp(long val, long alignment) {
-        return ((val + alignment - 1) / alignment) * alignment;
+        if (val < 0 || alignment <= 0) {
+            throw new IllegalArgumentException("Value must be non-negative and alignment must be positive");
+        }
+        long remainder = val % alignment;
+        if (remainder == 0) return val;
+        long padding = alignment - remainder;
+        if (val > Long.MAX_VALUE - padding) {
+            throw new ArithmeticException("Aligned value exceeds the supported long range");
+        }
+        return val + padding;
     }
 
     public static int alignUp(int val, int alignment) {
-        return ((val + alignment - 1) / alignment) * alignment;
+        long aligned = alignUp((long) val, (long) alignment);
+        if (aligned > Integer.MAX_VALUE) {
+            throw new ArithmeticException("Aligned value exceeds the supported integer range");
+        }
+        return (int) aligned;
     }
 
     public static int alignUpAlloc(int val) {

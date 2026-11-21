@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - android-port/stage-01-audit
+      - android-port/finalize-downloadstream-120-129
   pull_request:
     branches:
       - android-port/stage-01-audit

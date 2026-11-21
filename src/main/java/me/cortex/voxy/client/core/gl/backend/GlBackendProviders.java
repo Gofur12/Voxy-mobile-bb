@@ -20,7 +20,7 @@ import java.util.ServiceLoader;
  * unavailable; they must never create or take ownership of the host context.
  */
 public final class GlBackendProviders {
-    private static final String DESKTOP_PROVIDER_ID = "desktop-opengl-45";
+    private static final String DESKTOP_PROVIDER_ID = "desktop-opengl-46";
 
     private GlBackendProviders() {}
 
@@ -59,7 +59,14 @@ public final class GlBackendProviders {
                 continue;
             }
 
-            String id = provider.id();
+            final String id;
+            try {
+                id = provider.id();
+            } catch (RuntimeException | LinkageError failure) {
+                Logger.warn("Unable to query an optional Voxy GPU backend provider id: "
+                        + failure.getMessage());
+                continue;
+            }
             if (id == null || id.isBlank()) {
                 Logger.warn("Ignoring Voxy GPU backend provider with an empty id");
                 continue;

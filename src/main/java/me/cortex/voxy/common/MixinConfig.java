@@ -6,6 +6,7 @@ import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
 import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 public class MixinConfig implements IMixinConfigPlugin {
@@ -28,6 +29,11 @@ public class MixinConfig implements IMixinConfigPlugin {
 
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixin) {
+        // GPUSelect loads GDI32/Kernel32 and patches Windows driver selection.
+        // Do not apply it on Linux, macOS, Android, or other non-Windows runtimes.
+        if (mixin.endsWith(".minecraft.util.MixinGPUSelect") && !isWindowsRuntime()) {
+            return false;
+        }
         if (mixin.startsWith(this.mixinPackage)) {
             var pth = mixin.substring(this.mixinPackage.length());
             if (!pth.contains(".")) return true;
@@ -39,6 +45,14 @@ public class MixinConfig implements IMixinConfigPlugin {
             return false;
         }
         return true;
+    }
+
+    private static boolean isWindowsRuntime() {
+        return propertyContains("os.name", "windows");
+    }
+
+    private static boolean propertyContains(String property, String value) {
+        return System.getProperty(property, "").toLowerCase(Locale.ROOT).contains(value);
     }
 
     @Override

@@ -68,6 +68,8 @@ if (voxyTarget == "1.20.1") {
                         "me/cortex/voxy/client/mixin/iris/MixinIrisRenderingPipeline.java",
                         "me/cortex/voxy/client/mixin/sodium/MixinFallbackVisibleChunkCollector.java",
                         "me/cortex/voxy/client/mixin/sodium/MixinRenderRegionManager.java",
+                        // Sodium 0.5.13 uses the legacy package; this mixin targets modern net.caffeinemc Sodium.
+                        "me/cortex/voxy/client/mixin/sodium/MixinChunkJobQueue.java",
                         // Targets that do not exist on 1.20.1 (LevelExtractor, client.renderer.fog,
                         // ClientCommonPacketListenerImpl are all post-1.20.1 classes).
                         "me/cortex/voxy/client/mixin/minecraft/MixinLevelExtractor.java",
@@ -244,7 +246,7 @@ processResources {
     var version = project.version
 
     def access_widener = voxyTarget == "1.20.1" ? "voxy-1.20.1.accesswidener" : "voxy.accesswidener"
-    def props = ["version": version, "commit": hash, "buildtime": time, "allowed_sodium_versions": sodium_versions, "allowed_mc_version": allowed_mc_version, "access_widener": access_widener, "modmenu_entrypoint": voxyTarget == "1.20.1" ? "" : '"me.cortex.voxy.client.config.ModMenuIntegration"', "sodium_config_entrypoint": voxyTarget == "1.20.1" ? "" : '"me.cortex.voxy.client.config.VoxyConfigMenu"', "client_mixin_config": voxyTarget == "1.20.1" ? '"client.voxy.1.20.1.mixins.json"' : '"client.voxy.mixins.json"', "common_mixin_config": voxyTarget == "1.20.1" ? '"common.voxy.1.20.1.mixins.json"' : '"common.voxy.mixins.json"']
+    def props = ["version": version, "commit": hash, "buildtime": time, "allowed_sodium_versions": sodium_versions, "allowed_mc_version": allowed_mc_version, "access_widener": access_widener, "modmenu_entrypoint": '"me.cortex.voxy.client.config.ModMenuIntegration"', "sodium_config_entrypoint": voxyTarget == "1.20.1" ? "" : '"me.cortex.voxy.client.config.VoxyConfigMenu"', "client_mixin_config": voxyTarget == "1.20.1" ? '"client.voxy.1.20.1.mixins.json"' : '"client.voxy.mixins.json"', "common_mixin_config": voxyTarget == "1.20.1" ? '"common.voxy.1.20.1.mixins.json"' : '"common.voxy.mixins.json"']
 
     for (var prop : props) {
         String value = prop.value;

@@ -8,6 +8,12 @@ import net.fabricmc.loader.api.FabricLoader;
 import net.fabricmc.loader.api.ModContainer;
 
 public class VoxyCommon implements ModInitializer {
+    static {
+        // Android ART does not guarantee the field layout assumed by JOML's Unsafe
+        // accessor. Select JOML's portable NIO implementation before Minecraft
+        // initializes RenderSystem/Matrix3f and therefore JOML's MemUtil singleton.
+        System.setProperty("joml.nounsafe", "true");
+    }
     public static final String MOD_VERSION;
     public static final boolean IS_DEDICATED_SERVER;
     public static final boolean IS_IN_MINECRAFT;

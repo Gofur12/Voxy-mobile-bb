@@ -63,7 +63,10 @@ public final class GlBackendRuntime {
                             + " (context generation " + contextGeneration + ")");
                     return true;
                 }
-            } catch (RuntimeException failure) {
+            } catch (RuntimeException | LinkageError failure) {
+                // Optional providers may be absent or incompatible with the
+                // host's native binding. Treat linkage failures like an
+                // unsupported provider rather than crashing client startup.
                 // A provider that constructed a backend but failed before
                 // returning it still owns cleanup of its partial construction.
                 Logger.warn("Voxy GPU backend provider '" + provider.id()

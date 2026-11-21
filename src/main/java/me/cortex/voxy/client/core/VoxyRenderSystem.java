@@ -86,16 +86,16 @@ public class VoxyRenderSystem {
             throw new IllegalStateException("Voxy renderer selection requires a current OpenGL context", noCurrentContext);
         }
 
-        // This renderer also relies on the desktop GL 4.5 DSA API. Do not
-        // infer compatibility from the device name or from GLES extensions.
-        if (!gl.OpenGL45) {
+        // MDIC shaders include GLSL 4.60 sources. Do not infer compatibility
+        // from the device name or from GLES extensions.
+        if (!gl.OpenGL46) {
             throw new UnsupportedOperationException(
-                    "Voxy MDIC renderer requires desktop OpenGL 4.5; no GLES renderer is available yet"
+                    "Voxy MDIC renderer requires desktop OpenGL 4.6 (GLSL 460); no GLES renderer is available yet"
             );
         }
 
         GlCapabilities capabilities = new GlCapabilities(
-                4, 5, false,
+                4, 6, false,
                 gl.GL_ARB_buffer_storage,
                 gl.GL_ARB_buffer_storage,
                 gl.OpenGL43 || gl.GL_ARB_compute_shader,
@@ -118,13 +118,8 @@ public class VoxyRenderSystem {
     }
 
     public VoxyRenderSystem(WorldEngine world, ServiceManager sm) {
-        //Keep the world loaded, NOTE: this is done FIRST, to keep and ensure that even if the rest of loading takes more
-        // than timeout, we keep the world acquired
-        world.acquireRef();
-        Logger.info("Creating Voxy render system");
-
-        // Select and validate the renderer before any SSBO state queries or
-        // GPU resource construction can run.
+        // Validate the renderer before acquiring the world or touching GL resources.
+        // Unsupported contexts must not leave an acquired world reference behind.
         var backendFactory = getRenderBackendFactory();
 
         System.gc();
@@ -140,6 +135,11 @@ public class VoxyRenderSystem {
         for (int i = 0; i < oldBufferBindings.length; i++) {
             oldBufferBindings[i] = glGetIntegeri(GL_SHADER_STORAGE_BUFFER_BINDING, i);
         }
+
+        // Keep the world alive for the resource-construction phase. Acquire only
+        // after renderer validation and all preflight GL queries have succeeded.
+        world.acquireRef();
+        Logger.info("Creating Voxy render system");
 
         try {
             //wait for opengl to be finished, this should hopefully ensure all memory allocations are free
@@ -209,7 +209,7 @@ public class VoxyRenderSystem {
             this.boundOutlineRenderer = new BoundRenderer(this.pipeline);
 
             Logger.info("Voxy render system created with " + this.geometryData.getMaxCapacity() + " geometry capacity, using pipeline '" + this.pipeline.getClass().getSimpleName() + "' with renderer '" + sectionRenderer.getClass().getSimpleName() + "'");
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | Error e) {
             world.releaseRef();//If something goes wrong, we must release the world first
             throw e;
         }

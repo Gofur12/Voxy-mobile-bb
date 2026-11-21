@@ -79,6 +79,7 @@ public class DownloadStream {
 
     public void download(GlBuffer buffer, long downloadOffset, long size, DownloadResultConsumer resultConsumer) {
         this.requireCurrentContext();
+        buffer.assertContextCurrent();
         if (size > Integer.MAX_VALUE || size <= 0 || downloadOffset < 0
                 || downloadOffset > buffer.size() || size > buffer.size() - downloadOffset) {
             throw new IllegalArgumentException("Invalid download range");
@@ -105,7 +106,18 @@ public class DownloadStream {
                     throw new IllegalStateException("Could not allocate a download segment after waiting for previous frames");
                 }
             }
-            this.thisFrameAllocations.add(this.caddr);
+            try {
+                this.thisFrameAllocations.add(this.caddr);
+            } catch (RuntimeException | Error trackingFailure) {
+                try {
+                    this.allocationArena.free(this.caddr);
+                } catch (RuntimeException | Error cleanupFailure) {
+                    if (trackingFailure != cleanupFailure) trackingFailure.addSuppressed(cleanupFailure);
+                }
+                this.caddr = -1;
+                this.offset = 0;
+                throw trackingFailure;
+            }
             this.offset = size;
             addr = this.caddr;
         } else {
@@ -160,7 +172,12 @@ public class DownloadStream {
             MemoryUtil.nmemFree(destination);
             rethrowFailure(failure);
         }
-        this.cpuDownloads.add(new CpuDownload(destination, size, consumer));
+        try {
+            this.cpuDownloads.add(new CpuDownload(destination, size, consumer));
+        } catch (RuntimeException | Error enqueueFailure) {
+            MemoryUtil.nmemFree(destination);
+            throw enqueueFailure;
+        }
     }
 
     public void commit() {
@@ -176,7 +193,15 @@ public class DownloadStream {
             GlBackendRuntime.requireBackend(this.contextGeneration, "DownloadStream").copyBufferSubData(entry.target.id, this.downloadBuffer.id, entry.targetOffset, entry.downloadStreamOffset, entry.size);
         }
         GlBackendRuntime.requireBackend(this.contextGeneration, "DownloadStream").memoryBarrier(CLIENT_MAPPED_BUFFER_BARRIER_BIT | BUFFER_UPDATE_BARRIER_BIT);
-        this.thisFrameDownloadList.addAll(this.downloadList);
+        int previousSize = this.thisFrameDownloadList.size();
+        try {
+            this.thisFrameDownloadList.addAll(this.downloadList);
+        } catch (RuntimeException | Error transferFailure) {
+            while (this.thisFrameDownloadList.size() > previousSize) {
+                this.thisFrameDownloadList.remove(this.thisFrameDownloadList.size() - 1);
+            }
+            throw transferFailure;
+        }
         this.downloadList.clear();
         this.caddr = -1;
         this.offset = 0;
@@ -202,7 +227,20 @@ public class DownloadStream {
 
         this.commit();
         if (!this.thisFrameAllocations.isEmpty()) {
-            this.frames.add(new DownloadFrame(new GlFence(), new LongArrayList(this.thisFrameAllocations), new ArrayList<>(this.thisFrameDownloadList)));
+            // Retain source ownership until the frame and fence are enqueued successfully.
+            LongArrayList allocations = new LongArrayList(this.thisFrameAllocations);
+            ArrayList<DownloadData> data = new ArrayList<>(this.thisFrameDownloadList);
+            GlFence fence = new GlFence();
+            try {
+                this.frames.add(new DownloadFrame(fence, allocations, data));
+            } catch (RuntimeException | Error enqueueFailure) {
+                try {
+                    fence.free();
+                } catch (RuntimeException | Error fenceFailure) {
+                    if (enqueueFailure != fenceFailure) enqueueFailure.addSuppressed(fenceFailure);
+                }
+                throw enqueueFailure;
+            }
             this.thisFrameAllocations.clear();
             this.thisFrameDownloadList.clear();
         }
@@ -304,13 +342,24 @@ public class DownloadStream {
         GlBackendRuntime.requireBackend(this.contextGeneration, "DownloadStream").finish();
         this.tick();
         var fence = new GlFence();
-        GlBackendRuntime.requireBackend(this.contextGeneration, "DownloadStream").finish();
-        while (!fence.signaled()) {
+        Throwable failure = null;
+        try {
             GlBackendRuntime.requireBackend(this.contextGeneration, "DownloadStream").finish();
-            Thread.onSpinWait();
+            while (!fence.signaled()) {
+                GlBackendRuntime.requireBackend(this.contextGeneration, "DownloadStream").finish();
+                Thread.onSpinWait();
+            }
+            this.tick();
+        } catch (RuntimeException | Error flushFailure) {
+            failure = flushFailure;
+        } finally {
+            try {
+                fence.free();
+            } catch (RuntimeException | Error fenceFailure) {
+                failure = appendFailure(failure, fenceFailure);
+            }
         }
-        fence.free();
-        this.tick();
+        rethrowFailure(failure);
         if (!this.frames.isEmpty()) {
             throw new IllegalStateException();
         }
@@ -352,10 +401,15 @@ public class DownloadStream {
         if (this.closed) return;
         Throwable failure = null;
         boolean contextCurrent = GlBackendRuntime.isContextGenerationCurrent(this.contextGeneration);
+        boolean gpuQuiesced = false;
         if (contextCurrent) {
             try { this.flushWaitClear(); } catch (RuntimeException | Error flushFailure) { failure = appendFailure(failure, flushFailure); }
-            try { GlBackendRuntime.requireBackend(this.contextGeneration, "DownloadStream").finish(); }
-            catch (RuntimeException | Error finishFailure) { failure = appendFailure(failure, finishFailure); }
+            try {
+                GlBackendRuntime.requireBackend(this.contextGeneration, "DownloadStream").finish();
+                gpuQuiesced = true;
+            } catch (RuntimeException | Error finishFailure) {
+                failure = appendFailure(failure, finishFailure);
+            }
         }
         this.closed = true;
         while (!this.cpuDownloads.isEmpty()) MemoryUtil.nmemFree(this.cpuDownloads.removeFirst().address);
@@ -364,12 +418,17 @@ public class DownloadStream {
         this.thisFrameAllocations.clear();
         this.caddr = -1;
         this.offset = 0;
-        while (!this.frames.isEmpty()) {
-            DownloadFrame frame = this.frames.removeFirst();
-            try { frame.fence.free(); } catch (RuntimeException | Error fenceFailure) { failure = appendFailure(failure, fenceFailure); }
-        }
-        if (this.downloadBuffer != null) {
-            try { this.downloadBuffer.free(); } catch (RuntimeException | Error bufferFailure) { failure = appendFailure(failure, bufferFailure); }
+        if (gpuQuiesced) {
+            while (!this.frames.isEmpty()) {
+                DownloadFrame frame = this.frames.removeFirst();
+                try { frame.fence.free(); } catch (RuntimeException | Error fenceFailure) { failure = appendFailure(failure, fenceFailure); }
+            }
+            if (this.downloadBuffer != null) {
+                try { this.downloadBuffer.free(); } catch (RuntimeException | Error bufferFailure) { failure = appendFailure(failure, bufferFailure); }
+            }
+        } else {
+            // Avoid GL deletion while queued GPU work may still reference these objects.
+            this.frames.clear();
         }
         rethrowFailure(failure);
     }
